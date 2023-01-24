@@ -1,39 +1,31 @@
-//! virtual file system framework
+#![feature(linked_list_remove)]
 #![no_std]
+//! virtual file system framework
 
-mod superblock;
 mod dentrry;
-mod inode;
 mod file;
+mod inode;
 mod mount;
+mod superblock;
 
 extern crate alloc;
-
-use lazy_static::lazy_static;
-use spin::Mutex;
-use alloc::collections::LinkedList;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
+use lazy_static::lazy_static;
+use spin::{Mutex, RwLock};
 use superblock::SuperBlock;
-use hashbrown::HashMap;
-use crate::mount::VfsMount;
-use crate::superblock::FileSystemType;
 
+pub use mount::*;
+pub use superblock::*;
 
-lazy_static!{
-    pub static ref SUPERBLOCKS: Mutex<LinkedList<SuperBlock>> = Mutex::new(LinkedList::new());
-}
-lazy_static!{
-    pub static ref GLOBAL_HASH_MOUNT:Mutex<HashMap<usize,Arc<Mutex<VfsMount>>>> = Mutex::new(HashMap::new());
-}
-lazy_static!{
-    pub static ref ALL_FS:Mutex<LinkedList<Arc<Mutex<FileSystemType>>>> = Mutex::new(LinkedList::new());
-}
+pub type StrResult<T> = Result<T, &'static str>;
 
-// pub static SUPER_BLOCKS: Mutex<LinkedList<SuperBlock>> = Mutex::new(LinkedList::new());
-/// 注册文件系统
-///
-///
-pub fn register_filesystem(fs: Arc<Mutex<FileSystemType>>){
-    // 通过检查
-    ALL_FS.lock().push_back(fs);
+lazy_static! {
+    pub static ref SUPERBLOCKS: Mutex<Vec<SuperBlock>> = Mutex::new(Vec::new());
+}
+lazy_static! {
+    pub static ref GLOBAL_HASH_MOUNT: RwLock<Vec<Arc<Mutex<VfsMount>>>> = RwLock::new(Vec::new());
+}
+lazy_static! {
+    pub static ref ALL_FS: RwLock<Vec<Arc<Mutex<FileSystemType>>>> = RwLock::new(Vec::new());
 }
