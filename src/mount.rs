@@ -1,7 +1,7 @@
-use crate::dentrry::{DirEntry, DirFlags};
-use crate::inode::{
-    path_release, path_walk, InodeFlags, InodeMode, LookUpData, LookUpFlags,
+use crate::dentrry::{
+    path_release, path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags, ProcessFs,
 };
+use crate::inode::{InodeFlags, InodeMode};
 use crate::superblock::{lookup_filesystem, DataOps, SuperBlock};
 use crate::{StrResult, GLOBAL_HASH_MOUNT};
 use alloc::boxed::Box;
@@ -9,7 +9,7 @@ use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use bitflags::bitflags;
-use spin::{Mutex};
+use spin::Mutex;
 
 bitflags! {
     pub struct MountFlags:u32{
@@ -74,7 +74,7 @@ unsafe impl Sync for VfsMount {}
 /// * `fs_type` - 文件系统名
 /// * `flags` - 挂载标志
 /// * `data` - 额外的数据
-pub fn do_mount(
+pub fn do_mount<T: ProcessFs>(
     dev_name: &str,
     dir_name: &str,
     fs_type: &str,
@@ -99,7 +99,7 @@ pub fn do_mount(
     }
     flags -= MountFlags::MNT_NOSUID & MountFlags::MNT_NO_DEV & MountFlags::MNT_NO_EXEC;
     //  查找找安装点的 dentry 数据结构
-    let ret = path_walk(dir_name, LookUpFlags::READ_LINK);
+    let ret = path_walk::<T>(dir_name, LookUpFlags::READ_LINK);
     if ret.is_err() {
         return Err("Can't find mount dir");
     }
@@ -245,7 +245,7 @@ fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<(
     new_mount.lock().parent = Arc::downgrade(&look.mnt);
     new_mount.lock().mount_point = look.dentry.clone();
     // 加入上级对象的子对象链表中
-    look.mnt.lock().child.push(new_mount.clone());
+    look.mnt.lock().inert_child(new_mount.clone());
     look.dentry.lock().mount_count += 1;
 
     Ok(())

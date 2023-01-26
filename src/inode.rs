@@ -1,4 +1,4 @@
-use crate::dentrry::DirEntry;
+use crate::dentrry::{DirEntry, LookUpData};
 use crate::file::FileOps;
 use crate::mount::VfsMount;
 use crate::superblock::{Device, SuperBlock};
@@ -7,6 +7,7 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use bitflags::bitflags;
 use spin::Mutex;
+use crate::StrResult;
 
 bitflags! {
     pub struct InodeFlags:u32{
@@ -28,7 +29,7 @@ pub struct Inode {
     pub uid: u32,
     pub gid: u32,
     pub device: u32,
-    pub inode_ops: Arc<dyn InodeOps>,
+    pub inode_ops: Option<InodeOps>,
     pub file_ops: Arc<dyn FileOps>,
     /// 如果是块设备
     pub blk_dev: Option<Arc<dyn Device>>,
@@ -40,34 +41,7 @@ pub struct Inode {
     pub super_blk: Weak<Arc<Mutex<SuperBlock>>>,
 }
 
-pub trait InodeOps {}
-
-bitflags! {
-    pub struct LookUpFlags:u32{
-        const READ_LINK = 0;
-    }
-}
-const MAX_NESTED_LINKS: usize = 5;
-
-pub struct LookUpData {
-    /// 查找标志
-    pub flags: LookUpFlags,
-    ///  查找到的目录对象
-    pub dentry: Arc<Mutex<DirEntry>>,
-    /// 已经安装的文件系统对象
-    pub mnt: Arc<Mutex<VfsMount>>,
-    /// 路径名最后一个分量的类型。如PATHTYPE_NORMAL
-    pub path_type: u32,
-    /// 符号链接查找的嵌套深度
-    pub nested_count: u32,
-    /// 嵌套关联路径名数组。
-    pub symlink_names: [String; MAX_NESTED_LINKS],
-}
-
-pub fn path_walk(mount_dir: &str, flags: LookUpFlags) -> Result<LookUpData, &'static str> {
-    unimplemented!()
-}
-
-pub fn path_release(lookup_data: &LookUpData) {
-    unimplemented!()
+pub struct InodeOps {
+    pub follow_link: Option<fn(dentry: Arc<Mutex<DirEntry>>, lookup_data:&mut LookUpData) -> StrResult<()>>,
+    pub lookup: Option<fn(dentry: Arc<Mutex<DirEntry>>, lookup_data:&mut LookUpData) -> StrResult<Arc<Mutex<DirEntry>>>>,
 }
