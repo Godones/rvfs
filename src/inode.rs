@@ -1,9 +1,6 @@
 use crate::dentrry::{DirEntry, LookUpData};
-use crate::file::FileOps;
-use crate::mount::VfsMount;
 use crate::superblock::{Device, SuperBlock};
-use alloc::rc::Weak;
-use alloc::string::String;
+use alloc::sync::Weak;
 use alloc::sync::Arc;
 use bitflags::bitflags;
 use spin::Mutex;
@@ -29,8 +26,8 @@ pub struct Inode {
     pub uid: u32,
     pub gid: u32,
     pub device: u32,
-    pub inode_ops: Option<InodeOps>,
-    pub file_ops: Arc<dyn FileOps>,
+    pub inode_ops: InodeOps,
+    pub file_ops: InodeOps,
     /// 如果是块设备
     pub blk_dev: Option<Arc<dyn Device>>,
     pub blk_size_bits: u8,
@@ -42,6 +39,6 @@ pub struct Inode {
 }
 
 pub struct InodeOps {
-    pub follow_link: Option<fn(dentry: Arc<Mutex<DirEntry>>, lookup_data:&mut LookUpData) -> StrResult<()>>,
-    pub lookup: Option<fn(dentry: Arc<Mutex<DirEntry>>, lookup_data:&mut LookUpData) -> StrResult<Arc<Mutex<DirEntry>>>>,
+    pub follow_link: fn(dentry: Arc<Mutex<DirEntry>>, lookup_data:&mut LookUpData) -> StrResult<()>,
+    pub lookup: fn(dentry: Arc<Mutex<DirEntry>>, lookup_data:&mut LookUpData) -> StrResult<Arc<Mutex<DirEntry>>>,
 }

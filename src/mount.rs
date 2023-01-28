@@ -1,5 +1,5 @@
 use crate::dentrry::{
-    path_release, path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags, ProcessFs,
+    path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags, ProcessFs,
 };
 use crate::inode::{InodeFlags, InodeMode};
 use crate::superblock::{lookup_filesystem, DataOps, SuperBlock};
@@ -105,8 +105,6 @@ pub fn do_mount<T: ProcessFs>(
     }
     let lookup_data = ret.unwrap();
     let ret = do_add_mount(&lookup_data, fs_type, flags, mnt_flags, dev_name, data);
-    //TODO! 释放路径
-    path_release(&lookup_data);
     ret
 }
 
@@ -258,7 +256,7 @@ fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<(
 /// 载。否则，查看对应的 VFS 超级块，如果该文件系统的 VFS 超级块标志为“脏”，则必须
 /// 将超级块信息写回磁盘。
 /// TODO do_unmount
-pub fn do_unmount(mount: Arc<Mutex<VfsMount>>, flags: MountFlags) -> StrResult<()> {
+pub fn do_unmount(mount: Arc<Mutex<VfsMount>>, _flags: MountFlags) -> StrResult<()> {
     let mut global_mount_lock = GLOBAL_HASH_MOUNT.write();
     // 检查是否有子挂载点
     if !mount.lock().child.is_empty() {

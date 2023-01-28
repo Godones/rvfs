@@ -1,3 +1,3 @@
 pub struct File {}
 
-pub trait FileOps {}
+pub struct  FileOps {}
