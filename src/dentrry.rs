@@ -1,11 +1,12 @@
 use crate::inode::{Inode, InodeMode};
-use crate::{GLOBAL_HASH_MOUNT, StrResult, VfsMount};
+use crate::{StrResult, VfsMount, GLOBAL_HASH_MOUNT};
 use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use spin::Mutex;
+
 bitflags! {
     pub struct DirFlags:u32{
         const IN_HASH = 0x1;
@@ -13,6 +14,7 @@ bitflags! {
 }
 
 const SHORT_FNAME_LEN: usize = 35;
+
 pub struct DirEntry {
     pub d_flags: DirFlags,
     /// 指向一个inode对象
@@ -26,9 +28,23 @@ pub struct DirEntry {
     /// 短文件名
     pub short_name: [u8; SHORT_FNAME_LEN],
 }
+impl DirEntry {
+    pub fn empty() -> Self {
+        DirEntry {
+            d_flags: DirFlags::empty(),
+            d_inode: Arc::new(Mutex::new(Inode::empty())),
+            parent: Weak::new(),
+            d_ops: DirEntryOps::empty(),
+            d_name: String::new(),
+            children: Vec::new(),
+            mount_count: 0,
+            short_name: [0; SHORT_FNAME_LEN],
+        }
+    }
+}
+
 unsafe impl Send for DirEntry {}
 unsafe impl Sync for DirEntry {}
-
 
 impl DirEntry {
     pub fn insert_child(&mut self, child: Arc<Mutex<DirEntry>>) {
@@ -38,17 +54,30 @@ impl DirEntry {
 
 pub struct DirEntryOps {
     pub d_hash: fn(dentry: Arc<Mutex<DirEntry>>, name: &str) -> usize,
-    pub d_compare: fn(dentry: Arc<Mutex<DirEntry>>, name1: &str,name2:&str) -> bool,
+    pub d_compare: fn(dentry: Arc<Mutex<DirEntry>>, name1: &str, name2: &str) -> bool,
     pub d_delete: fn(dentry: Arc<Mutex<DirEntry>>),
     /// 默认什么都不做
     pub d_release: fn(dentry: Arc<Mutex<DirEntry>>),
     /// 丢弃目录项对应的索引节点
     pub d_iput: fn(dentry: Arc<Mutex<DirEntry>>, inode: Arc<Mutex<Inode>>),
 }
+impl DirEntryOps {
+    fn empty() -> Self {
+        DirEntryOps {
+            d_hash: |_, _| 0,
+            d_compare: |_, _, _| false,
+            d_delete: |_| {},
+            d_release: |_| {},
+            d_iput: |_, _| {},
+        }
+    }
+}
 
+pub struct DirContext {}
 /// 进程需要提供的信息
 ///
 /// 由于vfs模块与内核模块分离了，所以需要进程提供一些信息
+
 pub struct ProcessFsInfo {
     pub root_mount: Arc<Mutex<VfsMount>>,
     pub root_dir: Arc<Mutex<DirEntry>>,
@@ -77,8 +106,8 @@ pub trait ProcessFs {
     fn check_nested_link() -> bool;
     // 更新进程链接文件的相关数据： 嵌套查询深度/ 调用链接查找的次数
     fn update_link_data();
+    fn max_link_count() -> u32;
 }
-
 
 bitflags! {
     pub struct LookUpFlags:u32{
@@ -96,7 +125,9 @@ bitflags! {
         const PATH_DOTDOT = 0x4;
     }
 }
+#[derive(Clone)]
 pub struct LookUpData {
+    pub last: String,
     // 文件名称
     pub name: String,
     /// 查找标志
@@ -120,7 +151,8 @@ impl LookUpData {
         mnt: Arc<Mutex<VfsMount>>,
     ) -> Self {
         Self {
-            name:"".to_string(),
+            last: "".to_string(),
+            name: "".to_string(),
             flags,
             dentry,
             mnt,
@@ -143,16 +175,19 @@ impl LookUpData {
     }
 }
 
-pub fn rename_dentry<T:ProcessFs>(old_dentry: Arc<Mutex<DirEntry>>, new_dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
+pub fn rename_dentry<T: ProcessFs>(
+    old_dentry: Arc<Mutex<DirEntry>>,
+    new_dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
     unimplemented!()
 }
 
- /// 当删除物理文件时，释放缓存描述符的引用并将其从哈希表中删除
+/// 当删除物理文件时，释放缓存描述符的引用并将其从哈希表中删除
 pub fn remove_dentry_cache(dentry: Arc<Mutex<DirEntry>>) {
     unimplemented!()
 }
 /// 在卸载特殊文件系统时，删除所有的缓存节点
-pub fn delete_all_dentry_cache(root:Arc<Mutex<DirEntry>>) {
+pub fn delete_all_dentry_cache(root: Arc<Mutex<DirEntry>>) {
     unimplemented!()
 }
 
@@ -174,7 +209,10 @@ pub fn path_walk<T: ProcessFs>(dir_name: &str, flags: LookUpFlags) -> StrResult<
 }
 
 /// 路径查找
-fn __generic_load_dentry<T:ProcessFs>(dir_name: &str, lookup_data: &mut LookUpData) -> StrResult<()> {
+fn __generic_load_dentry<T: ProcessFs>(
+    dir_name: &str,
+    lookup_data: &mut LookUpData,
+) -> StrResult<()> {
     let mut lookup_flags = lookup_data.flags;
     // 是否正在进行符号链接查找
     if lookup_data.nested_count > 0 {
@@ -206,7 +244,7 @@ fn __generic_load_dentry<T:ProcessFs>(dir_name: &str, lookup_data: &mut LookUpDa
         // 如果没有下一个分量，那么当前分量就是最后一个分量
         if dir_name.is_empty() {
             // 进入正常处理路径
-            return __normal_load_dentry::<T>(lookup_data,lookup_flags,component,inode);
+            return __normal_load_dentry::<T>(lookup_data, lookup_flags, component, inode);
         }
 
         // 如果分量以"/"结束,说明也是路径的最后一个分量，但是此分量代表目录。
@@ -215,7 +253,7 @@ fn __generic_load_dentry<T:ProcessFs>(dir_name: &str, lookup_data: &mut LookUpDa
         }
         if dir_name.is_empty() {
             // 进入以"/"结尾的路径处理
-            return __end_with_slashes::<T>(lookup_data,lookup_flags,component,inode);
+            return __end_with_slashes::<T>(lookup_data, lookup_flags, component, inode);
         }
 
         // 当前路径以"."开头
@@ -234,7 +272,7 @@ fn __generic_load_dentry<T:ProcessFs>(dir_name: &str, lookup_data: &mut LookUpDa
         let (mut next_mnt, mut next_dentry) = find_file_indir(lookup_data, component)?;
         // TODO 向前推进到当前目录最后一个安装点
         // 查找得到的目录可能依次挂载了很多文件系统
-        advance_mount(&mut next_mnt,&mut next_dentry)?;
+        advance_mount(&mut next_mnt, &mut next_dentry)?;
         inode = next_dentry.lock().d_inode.clone();
 
         //不是目录也不是符号链接
@@ -249,12 +287,12 @@ fn __generic_load_dentry<T:ProcessFs>(dir_name: &str, lookup_data: &mut LookUpDa
                 if inode.lock().mode != InodeMode::S_DIR {
                     return Err("file is not link or dir");
                 }
-            },
+            }
             InodeMode::S_DIR => {
                 // 普通目录对象
                 lookup_data.mnt = next_mnt.clone();
                 lookup_data.dentry = next_dentry.clone();
-            },
+            }
             _ => {
                 // 普通文件
                 return Err("file is not link or dir");
@@ -263,14 +301,19 @@ fn __generic_load_dentry<T:ProcessFs>(dir_name: &str, lookup_data: &mut LookUpDa
     }
 }
 
-
 /// 正常处理路径
-fn __normal_load_dentry<T:ProcessFs>(lookup_data:&mut LookUpData,lookup_flags:LookUpFlags,dir:&str,inode:Arc<Mutex<Inode>>)->StrResult<()>{
+fn __normal_load_dentry<T: ProcessFs>(
+    lookup_data: &mut LookUpData,
+    lookup_flags: LookUpFlags,
+    dir: &str,
+    inode: Arc<Mutex<Inode>>,
+) -> StrResult<()> {
     // 不解析最后一个文件名
     if lookup_flags.contains(LookUpFlags::NOLAST) {
         lookup_data.path_type = PathType::PATH_NORMAL;
+        lookup_data.last = dir.to_string();
         //TODO 保存最后一个分量
-        if !dir.starts_with("."){
+        if !dir.starts_with(".") {
             // 如果最后一个分量不是"."或者".."，那么最后一个分量默认就是LAST_NORM
             // 可以直接返回成功
             return Ok(());
@@ -285,9 +328,9 @@ fn __normal_load_dentry<T:ProcessFs>(lookup_data:&mut LookUpData,lookup_flags:Lo
     let mut inode = inode;
     if dir == "." {
         return Ok(());
-    }else if dir==".." {
+    } else if dir == ".." {
         // 尝试回到父目录
-        recede_parent::<T>(&mut lookup_data.mnt,&mut lookup_data.dentry)?;
+        recede_parent::<T>(&mut lookup_data.mnt, &mut lookup_data.dentry)?;
         inode = lookup_data.dentry.lock().d_inode.clone();
         return Ok(());
     }
@@ -314,43 +357,47 @@ fn __normal_load_dentry<T:ProcessFs>(lookup_data:&mut LookUpData,lookup_flags:Lo
     Ok(())
 }
 
-
 /// 结尾含有"/"
-fn __end_with_slashes<T:ProcessFs>(lookup_data:&mut LookUpData, lookup_flags:LookUpFlags,dir:&str,inode:Arc<Mutex<Inode>>) ->StrResult<()>{
+fn __end_with_slashes<T: ProcessFs>(
+    lookup_data: &mut LookUpData,
+    lookup_flags: LookUpFlags,
+    dir: &str,
+    inode: Arc<Mutex<Inode>>,
+) -> StrResult<()> {
     // 文件名最后一个字符是"/
     // 因此必须解析符号链接，并要求最终指向目录
-    let lookup_flags = lookup_flags | LookUpFlags::READ_LINK|LookUpFlags::DIRECTORY;
-    __normal_load_dentry::<T>(lookup_data,lookup_flags,dir,inode)
+    let lookup_flags = lookup_flags | LookUpFlags::READ_LINK | LookUpFlags::DIRECTORY;
+    __normal_load_dentry::<T>(lookup_data, lookup_flags, dir, inode)
 }
-
-
 
 /// 回退到父目录
 ///
 /// 需要注意的是，如果当前目录是一个安装点，那么需要回退到父目录的安装点
-fn recede_parent<T:ProcessFs>(mnt: &mut Arc<Mutex<VfsMount>>, dentry: &mut Arc<Mutex<DirEntry>>)
-    ->StrResult<()>
-{
+fn recede_parent<T: ProcessFs>(
+    mnt: &mut Arc<Mutex<VfsMount>>,
+    dentry: &mut Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
     let mut t_mnt = mnt.clone();
     let mut t_dentry = dentry.clone();
     loop {
         // TODO 获取当前进程文件系统上下文的锁，防止线程修改根目录
         let process_fs = T::get_fs_info();
         // 如果当前目录是根目录，那么不需要回退
-        if Arc::ptr_eq(&process_fs.root_dir,&t_dentry)&&
-            Arc::ptr_eq(&t_mnt, &process_fs.root_mount){
+        if Arc::ptr_eq(&process_fs.root_dir, &t_dentry)
+            && Arc::ptr_eq(&t_mnt, &process_fs.root_mount)
+        {
             break;
         }
         // 如果当前目录不是所在文件系统的根目录，那么需要回退
-        if !Arc::ptr_eq(&t_dentry, &t_mnt.lock().root){
-            let parent =  t_dentry.lock().parent.clone().upgrade().unwrap();
+        if !Arc::ptr_eq(&t_dentry, &t_mnt.lock().root) {
+            let parent = t_dentry.lock().parent.clone().upgrade().unwrap();
             t_dentry = parent;
             break;
         }
-        let _global_mnt  = GLOBAL_HASH_MOUNT.read();
+        let _global_mnt = GLOBAL_HASH_MOUNT.read();
         // 如果当前目录是文件系统的根目录，那么需要回退到父文件系统的根目录
         let parent_mnt = t_mnt.lock().parent.clone().upgrade();
-        if parent_mnt.is_none(){
+        if parent_mnt.is_none() {
             // 说明到达顶级文件系统
             break;
         }
@@ -363,7 +410,7 @@ fn recede_parent<T:ProcessFs>(mnt: &mut Arc<Mutex<VfsMount>>, dentry: &mut Arc<M
 }
 
 /// 在当前目录中搜索指定文件
-fn find_file_indir(
+pub fn find_file_indir(
     lookup_data: &mut LookUpData,
     name: &str,
 ) -> StrResult<(Arc<Mutex<VfsMount>>, Arc<Mutex<DirEntry>>)> {
@@ -376,7 +423,7 @@ fn find_file_indir(
         // 获取文件节点锁
         let _inode_lock = inode.lock();
         // 调用文件系统的回调，从设备上装载文件节点
-        dentry = __find_file_from_device(lookup_data,name);
+        dentry = __find_file_from_device(lookup_data, name);
         if dentry.is_err() {
             return Err("file not found");
         }
@@ -387,8 +434,8 @@ fn find_file_indir(
 /// 在缓存中搜索文件
 /// TODO 使用map保存而不是vec
 fn __find_in_cache(dentry: Arc<Mutex<DirEntry>>, name: &str) -> StrResult<Arc<Mutex<DirEntry>>> {
-    let  dentry = dentry;
-    let  dentry_lock = dentry.lock();
+    let dentry = dentry;
+    let dentry_lock = dentry.lock();
     let _comp_func = dentry_lock.d_ops.d_compare;
     for child in dentry_lock.children.iter() {
         let sub_name = child.lock().d_name.clone();
@@ -405,28 +452,36 @@ fn __find_in_cache(dentry: Arc<Mutex<DirEntry>>, name: &str) -> StrResult<Arc<Mu
  * 如果文件不存在，在缓存中创建一个缓存项
  * 调用者必须持有目录锁
  */
-fn __find_file_from_device(lookup_data:&mut LookUpData,name:&str)->StrResult<Arc<Mutex<DirEntry>>>{
+fn __find_file_from_device(
+    lookup_data: &mut LookUpData,
+    name: &str,
+) -> StrResult<Arc<Mutex<DirEntry>>> {
     // 先在节点缓存中搜索
-    let dentry = __find_in_cache(lookup_data.dentry.clone(),name);
-    if dentry.is_ok(){
+    let dentry = __find_in_cache(lookup_data.dentry.clone(), name);
+    if dentry.is_ok() {
         return dentry;
     }
     // 缓存中不存在
-    let inode=  lookup_data.dentry.lock().d_inode.clone();
+    let inode = lookup_data.dentry.lock().d_inode.clone();
     let lookup_func = inode.lock().inode_ops.lookup;
-    lookup_func(lookup_data.dentry.clone(),lookup_data)
+    lookup_func(lookup_data.dentry.clone(), lookup_data)
 }
 
 /// 找到当前目录的最后一个挂载点
 /// 并切换到该挂载点
-fn advance_mount(mnt:&mut Arc<Mutex<VfsMount>>,next_dentry:&mut Arc<Mutex<DirEntry>>)->StrResult<()>{
+pub fn advance_mount(
+    mnt: &mut Arc<Mutex<VfsMount>>,
+    next_dentry: &mut Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
     let mut mount_count = next_dentry.lock().mount_count;
     let mut t_mnt = mnt.clone();
-    let mut t_dentry =next_dentry.clone();
+    let mut t_dentry = next_dentry.clone();
     while mount_count > 0 {
         // 挂载点的根目录的mount_count必须大于0
-        let child_mnt = lookup_mount(t_mnt.clone(),t_dentry.clone());
-        if child_mnt.is_err(){break}
+        let child_mnt = lookup_mount(t_mnt.clone(), t_dentry.clone());
+        if child_mnt.is_err() {
+            break;
+        }
         t_mnt = child_mnt.unwrap();
         t_dentry = t_mnt.lock().root.clone();
         mount_count = t_dentry.lock().mount_count;
@@ -437,36 +492,52 @@ fn advance_mount(mnt:&mut Arc<Mutex<VfsMount>>,next_dentry:&mut Arc<Mutex<DirEnt
 }
 
 /// 在当前挂载点中查找子挂载点
-fn lookup_mount(mnt:Arc<Mutex<VfsMount>>,next_dentry:Arc<Mutex<DirEntry>>)->StrResult<Arc<Mutex<VfsMount>>>{
+fn lookup_mount(
+    mnt: Arc<Mutex<VfsMount>>,
+    next_dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<Arc<Mutex<VfsMount>>> {
     let global_vfsmount_lock = GLOBAL_HASH_MOUNT.read();
-    global_vfsmount_lock.iter().find(|x| {
-        let x = x.lock();
-        let parent = x.parent.upgrade();
-        //  此挂载点的父挂载点是当前挂载点并且挂载点的根目录是参数指定
-        if parent.is_some() && Arc::ptr_eq(&parent.unwrap(),&mnt) && Arc::ptr_eq(&x.root,&next_dentry){
-            true
-        }else {
-            false
-        }
-    }).ok_or("mount not found").map(|x|x.clone())
+    global_vfsmount_lock
+        .iter()
+        .find(|x| {
+            let x = x.lock();
+            let parent = x.parent.upgrade();
+            //  此挂载点的父挂载点是当前挂载点并且挂载点的根目录是参数指定
+            if parent.is_some()
+                && Arc::ptr_eq(&parent.unwrap(), &mnt)
+                && Arc::ptr_eq(&x.root, &next_dentry)
+            {
+                true
+            } else {
+                false
+            }
+        })
+        .ok_or("mount not found")
+        .map(|x| x.clone())
 }
 /// 读取链接符号内容
 /// * `dentry` - 源文件
 /// * `lookup_data` - 查找数据
-fn advance_link<T:ProcessFs>(lookup_data: &mut LookUpData, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
+pub fn advance_link<T: ProcessFs>(
+    lookup_data: &mut LookUpData,
+    dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
     // 进程需要检查嵌套层数
-    if T::check_nested_link(){
+    if T::check_nested_link() {
         return Err("too many nested links");
     }
-    lookup_data.nested_count +=1;
-    __advance_link::<T>(lookup_data,dentry)?;
-    lookup_data.nested_count -=1;
+    lookup_data.nested_count += 1;
+    __advance_link::<T>(lookup_data, dentry)?;
+    lookup_data.nested_count -= 1;
     Ok(())
 }
 /// 符号链接查找，不考虑嵌套计数
-fn __advance_link<T:ProcessFs>(lookup_data: &mut LookUpData, dentry: Arc<Mutex<DirEntry>>)->StrResult<()>{
+pub fn __advance_link<T: ProcessFs>(
+    lookup_data: &mut LookUpData,
+    dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
     let follow_link = dentry.lock().d_inode.lock().inode_ops.follow_link;
-    follow_link(dentry,lookup_data)?;
+    follow_link(dentry, lookup_data)?;
     let target_name = lookup_data.symlink_names.last().unwrap().clone();
     // 检查符号链接是否以'/'开头
     if target_name.starts_with("/") {
@@ -476,13 +547,13 @@ fn __advance_link<T:ProcessFs>(lookup_data: &mut LookUpData, dentry: Arc<Mutex<D
         lookup_data.dentry = process_info.current_dir.clone();
         lookup_data.mnt = process_info.current_mount.clone();
     }
-    __generic_load_dentry::<T>(&target_name,lookup_data)
+    __generic_load_dentry::<T>(&target_name, lookup_data)
 }
 
 #[inline]
 fn get_next_path_component(dir_name: &str) -> (&str, &str) {
     let mut next_path = "";
-    let component ;
+    let component;
     if let Some(index) = dir_name.find("/") {
         next_path = &dir_name[index..];
         component = &dir_name[..index];

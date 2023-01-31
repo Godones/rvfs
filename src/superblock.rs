@@ -9,16 +9,18 @@ use alloc::sync::Arc;
 use alloc::sync::Weak;
 use alloc::vec::Vec;
 use bitflags::bitflags;
+use core::fmt::Debug;
 use core::sync::atomic::AtomicU32;
 use spin::Mutex;
 
 pub type DevDesc = u32;
+
 pub struct SuperBlock {
     /// 块设备描述符
     pub dev_desc: DevDesc,
     pub device: Arc<Mutex<dyn Device>>,
     /// 块大小
-    pub block_size: usize,
+    pub block_size: u32,
     /// 超级快是否脏
     pub dirty_flag: bool,
     /// 文件最大长度
@@ -27,16 +29,12 @@ pub struct SuperBlock {
     pub mount_flag: MountFlags,
     /// 魔数
     pub magic: u32,
-    /// 描述符引用计数
-    pub ref_count: u32,
-    ///
-    pub ref_active: AtomicU32,
     /// 所属文件系统类型，避免循环引用
     pub file_system_type: Weak<Mutex<FileSystemType>>,
     /// 超级快操作
     pub super_block_ops: SuperBlockOps,
     /// 文件系统根节点
-    pub root_inode: Arc<Mutex<DirEntry>>,
+    pub root: Arc<Mutex<DirEntry>>,
     /// 脏inode
     pub dirty_inode: Vec<Arc<Mutex<Inode>>>,
     /// 需要同步到磁盘的inode
@@ -46,7 +44,7 @@ pub struct SuperBlock {
     /// 块设备名称
     pub blk_dev_name: String,
     /// 其它数据
-    pub data: Box<dyn DataOps>,
+    pub data: Option<Box<dyn DataOps>>,
 }
 
 impl SuperBlock {
@@ -58,6 +56,13 @@ impl SuperBlock {
     }
     pub fn insert_file(&mut self, file: Arc<Mutex<File>>) {
         self.files.push(file);
+    }
+    pub fn remove_file(&mut self, file: Arc<Mutex<File>>) {
+        self.files.retain(|f| !Arc::ptr_eq(f, &file));
+    }
+    pub fn remove_inode(&mut self, inode: Arc<Mutex<Inode>>) {
+        self.dirty_inode.retain(|i| !Arc::ptr_eq(i, &inode));
+        self.sync_inode.retain(|i| !Arc::ptr_eq(i, &inode));
     }
 }
 
@@ -71,17 +76,13 @@ pub trait Device {
 pub trait DataOps {}
 
 pub struct SuperBlockOps {
-    pub alloc_inode: fn(super_blk: Arc<Mutex<SuperBlock>>) -> Arc<Mutex<Inode>>,
-    //Deallocates the given inode
-    pub destroy_inode: fn(inode: Arc<Mutex<Inode>>),
+    pub alloc_inode: fn(super_blk: Arc<Mutex<SuperBlock>>) -> StrResult<Arc<Mutex<Inode>>>,
     //Writes the given inode to disk
     pub write_inode: fn(inode: Arc<Mutex<Inode>>, flag: u32),
     //Makes the given inode dirty
     pub dirty_inode: fn(inode: Arc<Mutex<Inode>>),
     //Deletes the given inode from the disk
     pub delete_inode: fn(inode: Arc<Mutex<Inode>>),
-    //Called by the VFS on unmount to release the given superblock object
-    pub free_super: fn(super_blk: Arc<Mutex<SuperBlock>>),
     //Writes the given SuperBlock to disk
     pub write_super: fn(super_blk: Arc<Mutex<SuperBlock>>),
     //Synchronizes filesystem metadata with the on-disk filesystem
@@ -91,13 +92,16 @@ pub struct SuperBlockOps {
     //unlock the fs
     pub unfreeze_fs: fn(super_blk: Arc<Mutex<SuperBlock>>),
     //Called by the VFS to obtain filesystem statistics
-    pub stat_fs: fn(dentry: Arc<Mutex<DirEntry>>) -> StrResult<StatFs>,
-    //Called by the VFS to release the inode and clear any pages containing related data.
-    pub clear_inode: fn(inode: Arc<Mutex<Inode>>),
+    pub stat_fs: fn(super_blk: Arc<Mutex<SuperBlock>>) -> StrResult<StatFs>,
 }
 
-pub struct StatFs {}
+pub struct StatFs {
+    pub fs_type: u32,
+    pub block_size: u32,
+    pub name: String,
+}
 
+/// 文件系统类型
 pub struct FileSystemType {
     pub name: &'static str,
     pub fs_flags: FileSystemAttr,
@@ -120,6 +124,7 @@ impl FileSystemType {
 bitflags! {
     pub struct FileSystemAttr:u32{
         const FS_REQUIRES_DEV = 0x00000001;
+
     }
 }
 
@@ -157,4 +162,25 @@ pub fn lookup_filesystem(name: &str) -> Option<Arc<Mutex<FileSystemType>>> {
         .find(|fs_type| fs_type.lock().name == name)
         .map(|fs_type| fs_type.clone());
     fs_type
+}
+
+// 查找超级块
+pub fn find_super_blk(
+    fs_type: Arc<Mutex<FileSystemType>>,
+    test: Option<&dyn  Fn(Arc<Mutex<SuperBlock>>) -> bool>,
+) -> StrResult<Arc<Mutex<SuperBlock>>> {
+    if test.is_none() {
+        return Err("No SuperBlk");
+    }
+    let test = test.unwrap();
+    let lock = fs_type.lock();
+    // 根据用户传入的函数，查找超级块
+    let super_blk = lock
+        .super_blk_s
+        .iter()
+        .find(|&super_blk| test(super_blk.clone()));
+    match super_blk {
+        None => Err("No SuperBlk"),
+        Some(super_blk) => Ok(super_blk.clone()),
+    }
 }

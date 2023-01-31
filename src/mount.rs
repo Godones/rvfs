@@ -1,6 +1,4 @@
-use crate::dentrry::{
-    path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags, ProcessFs,
-};
+use crate::dentrry::{path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags, ProcessFs};
 use crate::inode::{InodeFlags, InodeMode};
 use crate::superblock::{lookup_filesystem, DataOps, SuperBlock};
 use crate::{StrResult, GLOBAL_HASH_MOUNT};
@@ -20,7 +18,6 @@ bitflags! {
         const MNT_INTERNAL = 0xf;
     }
 }
-
 /// 挂载点描述符
 pub struct VfsMount {
     /// 挂载点标志
@@ -42,7 +39,7 @@ pub struct VfsMount {
 impl VfsMount {
     pub fn new(dev_name: &str, super_block: Arc<Mutex<SuperBlock>>) -> VfsMount {
         // 设置挂载点所在目录与挂载的文件系统根目录相同
-        let dir = super_block.lock().root_inode.clone();
+        let dir = super_block.lock().root.clone();
         let mount = VfsMount {
             flag: MountFlags::empty(),
             dev_name: dev_name.to_string(),

@@ -1,4 +1,5 @@
 #![feature(linked_list_remove)]
+#![feature(const_mut_refs)]
 #![no_std]
 //! virtual file system framework
 
@@ -6,21 +7,20 @@ mod dentrry;
 mod file;
 mod inode;
 mod mount;
+mod ramfs;
 mod superblock;
 
 extern crate alloc;
+use crate::dentrry::DirEntry;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
+pub use mount::*;
 use spin::{Mutex, RwLock};
 use superblock::SuperBlock;
-pub use mount::*;
 pub use superblock::*;
-use crate::dentrry::DirEntry;
 
 pub type StrResult<T> = Result<T, &'static str>;
-
-
 
 lazy_static! {
     pub static ref SUPERBLOCKS: Mutex<Vec<SuperBlock>> = Mutex::new(Vec::new());
