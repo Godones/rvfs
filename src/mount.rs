@@ -1,12 +1,14 @@
 use crate::dentrry::{path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags, ProcessFs};
 use crate::inode::{InodeFlags, InodeMode};
 use crate::superblock::{lookup_filesystem, DataOps, SuperBlock};
-use crate::{StrResult, GLOBAL_HASH_MOUNT};
+use crate::{iinfo, StrResult, GLOBAL_HASH_MOUNT};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use bitflags::bitflags;
+use core::fmt::{Debug, Formatter};
+use logger::info;
 use spin::Mutex;
 
 bitflags! {
@@ -36,14 +38,42 @@ pub struct VfsMount {
     pub child: Vec<Arc<Mutex<VfsMount>>>,
 }
 
+impl Debug for VfsMount {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("VfsMount")
+            .field("flag", &self.flag)
+            .field("dev_name", &self.dev_name)
+            .field("mount_point", &self.mount_point)
+            .field("root", &self.root)
+            .field("super_block", &self.super_block)
+            .field("child", &self.child)
+            .finish()
+    }
+}
+
 impl VfsMount {
-    pub fn new(dev_name: &str, super_block: Arc<Mutex<SuperBlock>>) -> VfsMount {
+    pub fn empty() -> Self {
+        VfsMount {
+            flag: MountFlags::empty(),
+            dev_name: String::new(),
+            parent: Weak::new(),
+            mount_point: Arc::new(Mutex::new(DirEntry::empty())),
+            root: Arc::new(Mutex::new(DirEntry::empty())),
+            super_block: Arc::new(Mutex::new(SuperBlock::empty())),
+            child: Vec::new(),
+        }
+    }
+    pub fn new(
+        dev_name: &str,
+        super_block: Arc<Mutex<SuperBlock>>,
+        parent: Weak<Mutex<VfsMount>>,
+    ) -> VfsMount {
         // 设置挂载点所在目录与挂载的文件系统根目录相同
         let dir = super_block.lock().root.clone();
         let mount = VfsMount {
             flag: MountFlags::empty(),
             dev_name: dev_name.to_string(),
-            parent: Weak::new(),
+            parent,
             mount_point: dir.clone(),
             root: dir.clone(),
             super_block,
@@ -138,7 +168,7 @@ fn do_add_mount(
 }
 
 /// 生成一个挂载点
-fn do_kernel_mount(
+pub fn do_kernel_mount(
     fs_type: &str,
     flags: MountFlags,
     dev_name: &str,
@@ -152,10 +182,12 @@ fn do_kernel_mount(
     let fs_type = fs_type.unwrap();
     // 从设备读取文件系统超级块数据
     let get_sb_func = fs_type.lock().get_super_blk;
+
+    iinfo!("do_kernel_mount");
     let super_blk = (get_sb_func)(fs_type, flags, dev_name, data)?;
 
     // 分配挂载点描述符
-    let mount = VfsMount::new(dev_name, super_blk);
+    let mount = VfsMount::new(dev_name, super_blk, Weak::new());
     let mount = Arc::new(Mutex::new(mount));
 
     // 将parent指向自身，表示它是一个独立的根
@@ -257,7 +289,7 @@ pub fn do_unmount(mount: Arc<Mutex<VfsMount>>, _flags: MountFlags) -> StrResult<
     let mut global_mount_lock = GLOBAL_HASH_MOUNT.write();
     // 检查是否有子挂载点
     if !mount.lock().child.is_empty() {
-        return Err("has child");
+        return Err("Have child");
     } else {
         let parent = mount.lock().parent.upgrade().unwrap();
         // 从父挂载点的子挂载点链表中删除

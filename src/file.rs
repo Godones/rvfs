@@ -1,12 +1,13 @@
 use crate::dentrry::{
-    __advance_link, advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry,
-    LookUpData, LookUpFlags, PathType, ProcessFs,
+    __advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry, LookUpData,
+    LookUpFlags, PathType, ProcessFs,
 };
 use crate::inode::{Inode, InodeMode};
-use crate::{StrResult, VfsMount};
+use crate::{wwarn, StrResult, VfsMount};
 use alloc::sync::Arc;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
+use logger::{info, warn};
 use spin::Mutex;
 
 pub struct File {
@@ -32,6 +33,7 @@ impl Debug for File {
             .field("f_pos", &self.f_pos)
             .field("f_uid", &self.f_uid)
             .field("f_gid", &self.f_gid)
+            .field("f_dentry", &self.f_dentry)
             .finish()
     }
 }
@@ -94,7 +96,7 @@ pub struct FileOps {
     // filldir_t用于提取目录项的各个字段。
     // TODO readdir
     pub readdir: fn(file: Arc<Mutex<File>>) -> StrResult<DirContext>,
-    //系统调用ioctl提供了一种执行设备特殊命令的方法(如格式化软盘的某个磁道，这既不是读也不是写操作)。
+    /// 系统调用ioctl提供了一种执行设备特殊命令的方法(如格式化软盘的某个磁道，这既不是读也不是写操作)。
     //另外，内核还能识别一部分ioctl命令，而不必调用fops表中的ioctl。如果设备不提供ioctl入口点，
     // 则对于任何内核未预先定义的请求，ioctl系统调用将返回错误(-ENOTYY)
     pub ioctl: fn(
@@ -103,14 +105,21 @@ pub struct FileOps {
         cmd: u32,
         arg: u64,
     ) -> StrResult<isize>,
-    pub mmap: fn(file: Arc<Mutex<File>>, vma: VmArea) -> StrResult<isize>,
-    pub open: fn(file: Arc<Mutex<File>>) -> StrResult<isize>,
+    pub mmap: fn(file: Arc<Mutex<File>>, vma: VmArea) -> StrResult<()>,
+    pub open: fn(file: Arc<Mutex<File>>) -> StrResult<()>,
     pub flush: fn(file: Arc<Mutex<File>>) -> StrResult<()>,
-    // 该方法是fsync系统调用的后端实现
+    /// 该方法是fsync系统调用的后端实现
     // 用户调用它来刷新待处理的数据。
     // 如果驱动程序没有实现这一方法，fsync系统调用将返回-EINVAL。
-    pub fsync: fn(file: Arc<Mutex<File>>, datasync: bool) -> StrResult<isize>,
+    pub fsync: fn(file: Arc<Mutex<File>>, datasync: bool) -> StrResult<()>,
 }
+
+impl Debug for FileOps {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("FileOps").finish()
+    }
+}
+
 impl FileOps {
     pub const fn empty() -> FileOps {
         FileOps {
@@ -136,6 +145,7 @@ pub fn open_file<T: ProcessFs>(
     flags: FileFlags,
     mode: FileMode,
 ) -> StrResult<Arc<Mutex<File>>> {
+    wwarn!("open_file");
     let mut flags = flags;
     //  如果flag包含truncate标志，则将其转换为读写模式
     if flags.contains(FileFlags::O_TRUNC) {
@@ -185,6 +195,7 @@ pub fn write_file<T: ProcessFs>(
 }
 
 pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
+    wwarn!("vfs_mkdir");
     let lookup_data = path_walk::<T>(name, LookUpFlags::NOLAST);
     if lookup_data.is_err() {
         return Err("Can't find father dir");
@@ -193,19 +204,26 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     if lookup_data.path_type != PathType::PATH_NORMAL {
         return Err("It is not dir");
     }
+    info!("find child dir");
     // 搜索子目录
     let last = lookup_data.last.clone();
+    info!("last:{}", last);
     let inode = lookup_data.dentry.lock().d_inode.clone();
     let dentry = lookup_data.dentry.clone();
     let sub_dentry = find_file_indir(&mut lookup_data, &last);
     if sub_dentry.is_ok() {
         return Err("Dir exists");
     }
+    info!("create new dir");
     // 调用函数创建一个新的目录
+    let target_dentry = Arc::new(Mutex::new(DirEntry::empty()));
     let mkdir = inode.lock().inode_ops.mkdir;
-    let sub_dentry = mkdir(inode, name, mode)?;
-    sub_dentry.lock().parent = Arc::downgrade(&dentry);
-    dentry.lock().insert_child(sub_dentry.clone());
+    mkdir(inode, target_dentry.clone(), mode)?;
+    // 设置目录名
+    target_dentry.lock().d_name = last;
+    // 设置父子关系
+    target_dentry.lock().parent = Arc::downgrade(&dentry);
+    dentry.lock().insert_child(target_dentry.clone());
     // TODO dentry 插入全局链表
     Ok(())
 }
@@ -214,47 +232,43 @@ pub fn vfs_unlink() {
     unimplemented!()
 }
 
-
-
 pub fn generic_file_read(
     file: Arc<Mutex<File>>,
-    buf: &mut [u8],
-    offset: u64,
+    _buf: &mut [u8],
+    _offset: u64,
 ) -> StrResult<usize> {
+    // let inode = file.lock().f_dentry.lock().d_inode.clone();
     Ok(0)
 }
 
-pub fn generic_file_write(
-    file: Arc<Mutex<File>>,
-    buf: &[u8],
-    offset: u64,
-) -> StrResult<usize> {
+pub fn generic_file_write(_file: Arc<Mutex<File>>, _buf: &[u8], _offset: u64) -> StrResult<usize> {
     Ok(0)
 }
 
-pub fn generic_file_readdir(file: Arc<Mutex<File>>) -> StrResult<()> {
+pub fn generic_file_readdir(_file: Arc<Mutex<File>>) -> StrResult<()> {
     Ok(())
 }
 
-pub fn generic_file_ioctl(file: Arc<Mutex<File>>, cmd: u32, arg: u32) -> StrResult<()> {
+pub fn generic_file_ioctl(_file: Arc<Mutex<File>>, _cmd: u32, _arg: u32) -> StrResult<()> {
     Ok(())
 }
-pub fn generic_file_mmap(file: Arc<Mutex<File>>, vma: VmArea)->StrResult<isize>{
-    Ok(0)
+pub fn generic_file_mmap(_file: Arc<Mutex<File>>, _vma: VmArea) -> StrResult<()> {
+    Ok(())
 }
-
 
 fn construct_file(
-    lookup_data: &mut LookUpData,
+    lookup_data: &LookUpData,
     flags: FileFlags,
     mode: FileMode,
 ) -> StrResult<Arc<Mutex<File>>> {
+    wwarn!("construct_file");
     let dentry = lookup_data.dentry.clone();
     let inode = dentry.lock().d_inode.clone();
     let f_ops = inode.lock().file_ops.clone();
     let open = f_ops.open;
     let file = File::new(dentry.clone(), lookup_data.mnt.clone(), flags, mode, f_ops);
     let file = Arc::new(Mutex::new(file));
+    // TODO impl open in inodeops
     let res = open(file.clone());
     if res.is_err() {
         return Err(res.err().unwrap());
@@ -292,6 +306,11 @@ pub fn open_dentry<T: ProcessFs>(
     flags: FileFlags,
     mode: FileMode,
 ) -> StrResult<LookUpData> {
+    wwarn!("open_dentry");
+    info!("{:?} -> {:?}", flags, Into::<LookUpFlags>::into(flags));
+
+    // TODO 根据路径从缓存中直接查找
+
     // 只打开文件而不创建
     if !flags.contains(FileFlags::O_CREAT) {
         let res = path_walk::<T>(name, flags.into())?;
@@ -310,6 +329,7 @@ pub fn open_dentry<T: ProcessFs>(
     lookup_data.flags -= LookUpFlags::NOLAST;
     // 获得父目录项
     let last = lookup_data.last.clone();
+    info!("find father over, find child [{}] in dir", last);
     let mut find = find_file_indir(&mut lookup_data, &last).map(|x| x.1);
     // 识别最后一个分量
     let res = __recognize_last::<T>(&mut find, inode, flags, mode, &mut lookup_data);
@@ -326,13 +346,20 @@ fn __recognize_last<T: ProcessFs>(
     mode: FileMode,
     lookup_data: &mut LookUpData,
 ) -> StrResult<()> {
+    wwarn!("__recognize_last");
     let mut count = 0usize;
     if find.is_err() {
         // 在父目录中创建文件
         // 调用文件系统的回调来创建真实的文件
+        info!("create file in dir {}", lookup_data.dentry.lock().d_name);
         let create_func = inode.lock().inode_ops.create;
-        let create_dentry = create_func(inode.clone(), &lookup_data.last, mode)?;
-        lookup_data.dentry = create_dentry;
+        let target_dentry = Arc::new(Mutex::new(DirEntry::empty()));
+        create_func(inode.clone(), target_dentry.clone(), mode)?;
+        // 设置dentry信息
+        target_dentry.lock().d_name = lookup_data.last.clone();
+        target_dentry.lock().parent = Arc::downgrade(&lookup_data.dentry);
+
+        lookup_data.dentry = target_dentry;
         let mut flags = flags;
         flags -= FileFlags::O_TRUNC;
         check_file_flags();
@@ -376,6 +403,7 @@ fn __recognize_last<T: ProcessFs>(
     check_file_flags();
     // 设置正确结果
     lookup_data.dentry = find_dentry;
+    wwarn!("__recognize_last over");
     Ok(())
 }
 

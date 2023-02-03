@@ -1,26 +1,28 @@
 use crate::dentrry::{DirEntry, LookUpData};
 use crate::file::{FileMode, FileOps};
 use crate::superblock::{Device, SuperBlock};
-use crate::{StatFs, StrResult};
+use crate::{wwarn, StatFs, StrResult};
 use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::sync::Weak;
-use core::sync::atomic::AtomicU32;
 use bitflags::bitflags;
+use core::fmt::{Debug, Formatter};
+
 use spin::Mutex;
 
 bitflags! {
     pub struct InodeFlags:u32{
         // 目录被删除了(但是内存中还存在)
-        const S_DEL = 0x0;
+        const S_DEL = 0x1;
     }
     pub struct InodeMode:u32{
-        const S_IFLNK = 0x0;
-        const S_DIR = 0x1;
-        const S_FILE = 0x2;
+        const S_IFLNK = 0x1;
+        const S_DIR = 0x2;
+        const S_FILE = 0x3;
     }
 }
 
+#[derive(Debug)]
 pub struct Inode {
     /// 文件节点编号
     pub number: u32,
@@ -71,13 +73,19 @@ pub struct InodeOps {
     ) -> StrResult<Arc<Mutex<DirEntry>>>,
     /// 在某一目录下，为与目录项对象相关的普通文件创建一个新的磁盘索引节点。
     pub create:
-        fn(dir: Arc<Mutex<Inode>>, name: &str, mode: FileMode) -> StrResult<Arc<Mutex<DirEntry>>>,
+        fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, mode: FileMode) -> StrResult<()>,
     /// mkdir(dir, dentry, mode)  在某个目录下，为与目录项对应的目录创建一个新的索引节点
     pub mkdir:
-        fn(dir: Arc<Mutex<Inode>>, name: &str, mode: FileMode) -> StrResult<Arc<Mutex<DirEntry>>>,
+        fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, mode: FileMode) -> StrResult<()>,
 }
+impl Debug for InodeOps {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("InodeOps").finish()
+    }
+}
+
 impl InodeOps {
-    pub const  fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self {
             follow_link: |_, _| Err("NOT SUPPORT"),
             lookup: |_, _| Err("NOT SUPPORT"),
@@ -103,13 +111,17 @@ pub fn simple_statfs(sb_blk: Arc<Mutex<SuperBlock>>) -> StrResult<StatFs> {
 }
 
 /// 创建一个inode
-pub fn create_inode(sb_blk:Arc<Mutex<SuperBlock>>)->StrResult<Arc<Mutex<Inode>>>{
+pub fn create_tmp_inode_from_sb_blk(
+    sb_blk: Arc<Mutex<SuperBlock>>,
+) -> StrResult<Arc<Mutex<Inode>>> {
+    use crate::warn;
+    wwarn!("create_tmp_inode_from_sb_blk");
     let create_func = sb_blk.lock().super_block_ops.alloc_inode;
     let res = create_func(sb_blk.clone());
     let inode = match res {
         // 如果文件系统不支持，则需要直接创建
         Ok(inode) => inode,
-        Err("NOT SUPPORT") => Arc::new(Mutex::new(Inode::empty())),
+        Err("Not support") => Arc::new(Mutex::new(Inode::empty())),
         _ => return Err("create inode failed"),
     };
     let mut inode_lk = inode.lock();
@@ -118,13 +130,10 @@ pub fn create_inode(sb_blk:Arc<Mutex<SuperBlock>>)->StrResult<Arc<Mutex<Inode>>>
     // 设置inode的块大小
     inode_lk.blk_size = sb_blk.lock().block_size;
     // 设置inode的块设备
-    inode_lk.blk_dev = Some(sb_blk.lock().device.clone());
-    // 设置inode的编号
-    inode_lk.number = INODE_COUNT.fetch_add(1,core::sync::atomic::Ordering::SeqCst);
+    inode_lk.blk_dev = sb_blk.lock().device.clone();
     // 设置硬链接数
     inode_lk.hard_links = 1;
     drop(inode_lk);
+    wwarn!("create_tmp_inode_from_sb_blk end");
     Ok(inode)
 }
-
-static INODE_COUNT:AtomicU32 = AtomicU32::new(0);

@@ -1,10 +1,12 @@
 use crate::inode::{Inode, InodeMode};
-use crate::{StrResult, VfsMount, GLOBAL_HASH_MOUNT};
+use crate::{iinfo, wwarn, StrResult, VfsMount, GLOBAL_HASH_MOUNT};
 use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::bitflags;
+use core::fmt::{Debug, Formatter};
+use logger::{info, warn};
 use spin::Mutex;
 
 bitflags! {
@@ -12,8 +14,6 @@ bitflags! {
         const IN_HASH = 0x1;
     }
 }
-
-const SHORT_FNAME_LEN: usize = 35;
 
 pub struct DirEntry {
     pub d_flags: DirFlags,
@@ -25,9 +25,22 @@ pub struct DirEntry {
     pub d_name: String,
     pub children: Vec<Arc<Mutex<DirEntry>>>,
     pub mount_count: u32,
-    /// 短文件名
-    pub short_name: [u8; SHORT_FNAME_LEN],
 }
+
+impl Debug for DirEntry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DirEntry")
+            .field("d_flags", &self.d_flags)
+            .field("d_inode", &self.d_inode)
+            .field("parent", &self.parent)
+            .field("d_ops", &self.d_ops)
+            .field("d_name", &self.d_name)
+            .field("children", &self.children)
+            .field("mount_count", &self.mount_count)
+            .finish()
+    }
+}
+
 impl DirEntry {
     pub fn empty() -> Self {
         DirEntry {
@@ -38,7 +51,17 @@ impl DirEntry {
             d_name: String::new(),
             children: Vec::new(),
             mount_count: 0,
-            short_name: [0; SHORT_FNAME_LEN],
+        }
+    }
+    pub fn new(inode: Arc<Mutex<Inode>>, parent: Weak<Mutex<DirEntry>>, name: &str) -> Self {
+        DirEntry {
+            d_flags: DirFlags::empty(),
+            d_inode: inode,
+            parent,
+            d_ops: DirEntryOps::empty(),
+            d_name: name.to_string(),
+            children: Vec::new(),
+            mount_count: 0,
         }
     }
 }
@@ -61,6 +84,13 @@ pub struct DirEntryOps {
     /// 丢弃目录项对应的索引节点
     pub d_iput: fn(dentry: Arc<Mutex<DirEntry>>, inode: Arc<Mutex<Inode>>),
 }
+
+impl Debug for DirEntryOps {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DirEntryOps").finish()
+    }
+}
+
 impl DirEntryOps {
     fn empty() -> Self {
         DirEntryOps {
@@ -125,7 +155,7 @@ bitflags! {
         const PATH_DOTDOT = 0x4;
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LookUpData {
     pub last: String,
     // 文件名称
@@ -176,24 +206,25 @@ impl LookUpData {
 }
 
 pub fn rename_dentry<T: ProcessFs>(
-    old_dentry: Arc<Mutex<DirEntry>>,
-    new_dentry: Arc<Mutex<DirEntry>>,
+    _old_dentry: Arc<Mutex<DirEntry>>,
+    _new_dentry: Arc<Mutex<DirEntry>>,
 ) -> StrResult<()> {
     unimplemented!()
 }
 
 /// 当删除物理文件时，释放缓存描述符的引用并将其从哈希表中删除
-pub fn remove_dentry_cache(dentry: Arc<Mutex<DirEntry>>) {
+pub fn remove_dentry_cache(_dentry: Arc<Mutex<DirEntry>>) {
     unimplemented!()
 }
 /// 在卸载特殊文件系统时，删除所有的缓存节点
-pub fn delete_all_dentry_cache(root: Arc<Mutex<DirEntry>>) {
+pub fn delete_all_dentry_cache(_root: Arc<Mutex<DirEntry>>) {
     unimplemented!()
 }
 
 /// 加载目录项
 pub fn path_walk<T: ProcessFs>(dir_name: &str, flags: LookUpFlags) -> StrResult<LookUpData> {
     // 获取进程的文件系统信息
+    wwarn!("path_walk");
     let fs_info = T::get_fs_info();
     // 如果是绝对路径，则从根目录开始查找
     let (mnt, dentry) = if dir_name.starts_with("/") {
@@ -204,7 +235,8 @@ pub fn path_walk<T: ProcessFs>(dir_name: &str, flags: LookUpFlags) -> StrResult<
     };
     // 初始化查找数据
     let mut lookup_data = LookUpData::new(flags, dentry, mnt);
-    __generic_load_dentry::<T>(dir_name, &mut lookup_data)?;
+    let _x = __generic_load_dentry::<T>(dir_name, &mut lookup_data)?;
+    wwarn!("path_walk end");
     Ok(lookup_data)
 }
 
@@ -213,6 +245,7 @@ fn __generic_load_dentry<T: ProcessFs>(
     dir_name: &str,
     lookup_data: &mut LookUpData,
 ) -> StrResult<()> {
+    iinfo!("__generic_load_dentry");
     let mut lookup_flags = lookup_data.flags;
     // 是否正在进行符号链接查找
     if lookup_data.nested_count > 0 {
@@ -234,14 +267,15 @@ fn __generic_load_dentry<T: ProcessFs>(
     let mut inode = lookup_data.dentry.lock().d_inode.clone();
     // 循环处理每一个路径分量
     // 循环处理路径的每一个分量，但不处理最后一部分
+    info!("dir_name: {}", dir_name);
     loop {
         // 获取路径分量以及接下来的路径
         let (next_path, component) = get_next_path_component(dir_name);
+        info!("next_path: {}, component: {}", next_path, component);
         dir_name = next_path;
         lookup_data.name = component.to_string();
-        //TODO是否计算component的hash值
-
-        // 如果没有下一个分量，那么当前分量就是最后一个分量
+        //TODO 是否计算component的hash值
+        //如果没有下一个分量，那么当前分量就是最后一个分量
         if dir_name.is_empty() {
             // 进入正常处理路径
             return __normal_load_dentry::<T>(lookup_data, lookup_flags, component, inode);
@@ -308,6 +342,7 @@ fn __normal_load_dentry<T: ProcessFs>(
     dir: &str,
     inode: Arc<Mutex<Inode>>,
 ) -> StrResult<()> {
+    iinfo!("__normal_load_dentry");
     // 不解析最后一个文件名
     if lookup_flags.contains(LookUpFlags::NOLAST) {
         lookup_data.path_type = PathType::PATH_NORMAL;
@@ -323,6 +358,7 @@ fn __normal_load_dentry<T: ProcessFs>(
         } else if dir == ".." {
             lookup_data.path_type = PathType::PATH_DOTDOT;
         }
+        return Ok(());
     }
     // 处理. / ..两种特殊目录
     let mut inode = inode;
@@ -336,6 +372,8 @@ fn __normal_load_dentry<T: ProcessFs>(
     }
     // 在当前目录中搜索下一个分量。
     let (mut next_mnt, mut next_dentry) = find_file_indir(lookup_data, dir)?;
+
+    info!("find_file_indir ok");
     // TODO 向前推进到当前目录最后一个安装点
     advance_mount(&mut next_mnt, &mut next_dentry)?;
 
@@ -346,6 +384,7 @@ fn __normal_load_dentry<T: ProcessFs>(
         inode = lookup_data.dentry.lock().d_inode.clone();
     } else {
         // 普通目录对象
+        info!("普通目录对象");
         lookup_data.mnt = next_mnt;
         lookup_data.dentry = next_dentry;
     }
@@ -414,26 +453,31 @@ pub fn find_file_indir(
     lookup_data: &mut LookUpData,
     name: &str,
 ) -> StrResult<(Arc<Mutex<VfsMount>>, Arc<Mutex<DirEntry>>)> {
+    wwarn!("find_file_indir");
     // 先在缓存中搜索，看看文件是否存在
     let mut dentry = __find_in_cache(lookup_data.dentry.clone(), name);
     // 在缓存中没有找到
     // 必须在块设备上找一找了
     if dentry.is_err() {
-        let inode = lookup_data.dentry.lock().d_inode.clone();
+        // let inode = lookup_data.dentry.lock().d_inode.clone();
         // 获取文件节点锁
-        let _inode_lock = inode.lock();
         // 调用文件系统的回调，从设备上装载文件节点
         dentry = __find_file_from_device(lookup_data, name);
         if dentry.is_err() {
             return Err("file not found");
         }
     }
+    if dentry.is_err() {
+        return Err("file not found");
+    }
+    wwarn!("find_file_indir end");
     Ok((lookup_data.mnt.clone(), dentry.unwrap()))
 }
 
 /// 在缓存中搜索文件
-/// TODO 使用map保存而不是vec
 fn __find_in_cache(dentry: Arc<Mutex<DirEntry>>, name: &str) -> StrResult<Arc<Mutex<DirEntry>>> {
+    // TODO 使用map保存而不是vec
+    wwarn!("__find_in_cache");
     let dentry = dentry;
     let dentry_lock = dentry.lock();
     let _comp_func = dentry_lock.d_ops.d_compare;
@@ -442,9 +486,11 @@ fn __find_in_cache(dentry: Arc<Mutex<DirEntry>>, name: &str) -> StrResult<Arc<Mu
         // if comp_func
         // TODO deadlock in comp_func
         if sub_name.as_str() == name {
+            info!("find file in cache ok");
             return Ok(child.clone());
         }
     }
+    wwarn!("__find_in_cache end");
     Err("file not found")
 }
 /*
@@ -456,6 +502,7 @@ fn __find_file_from_device(
     lookup_data: &mut LookUpData,
     name: &str,
 ) -> StrResult<Arc<Mutex<DirEntry>>> {
+    iinfo!("__find_file_from_device");
     // 先在节点缓存中搜索
     let dentry = __find_in_cache(lookup_data.dentry.clone(), name);
     if dentry.is_ok() {
@@ -464,6 +511,7 @@ fn __find_file_from_device(
     // 缓存中不存在
     let inode = lookup_data.dentry.lock().d_inode.clone();
     let lookup_func = inode.lock().inode_ops.lookup;
+    iinfo!("__find_file_from_device end");
     lookup_func(lookup_data.dentry.clone(), lookup_data)
 }
 
@@ -473,6 +521,7 @@ pub fn advance_mount(
     mnt: &mut Arc<Mutex<VfsMount>>,
     next_dentry: &mut Arc<Mutex<DirEntry>>,
 ) -> StrResult<()> {
+    wwarn!("advance_mount");
     let mut mount_count = next_dentry.lock().mount_count;
     let mut t_mnt = mnt.clone();
     let mut t_dentry = next_dentry.clone();
@@ -488,6 +537,7 @@ pub fn advance_mount(
     }
     *mnt = t_mnt;
     *next_dentry = t_dentry;
+    wwarn!("advance_mount end");
     Ok(())
 }
 
