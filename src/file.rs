@@ -140,7 +140,7 @@ impl FileOps {
 /// * name:文件名
 /// * flags: 访问模式
 /// * mode: 创建文件读写权限
-pub fn open_file<T: ProcessFs>(
+pub fn vfs_open_file<T: ProcessFs>(
     name: &str,
     flags: FileFlags,
     mode: FileMode,
@@ -155,7 +155,7 @@ pub fn open_file<T: ProcessFs>(
     construct_file(&mut lookup_data, flags, mode)
 }
 
-pub fn close_file<T: ProcessFs>(file: Arc<Mutex<File>>) -> StrResult<()> {
+pub fn vfs_close_file<T: ProcessFs>(file: Arc<Mutex<File>>) -> StrResult<()> {
     // 调用文件的flush方法，只有少数驱动才会设置这个方法。
     let flush = file.lock().f_ops.flush;
     flush(file.clone())?;
@@ -166,7 +166,7 @@ pub fn close_file<T: ProcessFs>(file: Arc<Mutex<File>>) -> StrResult<()> {
     Ok(())
 }
 
-pub fn read_file<T: ProcessFs>(
+pub fn vfs_read_file<T: ProcessFs>(
     file: Arc<Mutex<File>>,
     buf: &mut [u8],
     offset: u64,
@@ -180,7 +180,7 @@ pub fn read_file<T: ProcessFs>(
     res
 }
 
-pub fn write_file<T: ProcessFs>(
+pub fn vfs_write_file<T: ProcessFs>(
     file: Arc<Mutex<File>>,
     buf: &[u8],
     offset: u64,

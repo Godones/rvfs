@@ -7,12 +7,11 @@ mod dentrry;
 mod file;
 mod inode;
 mod mount;
-mod ramfs;
+pub mod ramfs;
 mod superblock;
 
 extern crate alloc;
 use crate::dentrry::{DirEntry, ProcessFs, ProcessFsInfo};
-use crate::ramfs::root_fs_type;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -23,6 +22,7 @@ pub use mount::*;
 use spin::{Mutex, RwLock};
 use superblock::SuperBlock;
 
+use crate::ramfs::rootfs::root_fs_type;
 pub use dentrry::*;
 pub use file::*;
 pub use superblock::*;
@@ -49,7 +49,7 @@ pub fn init_vfs() {
     iinfo!("init_vfs");
     register_filesystem(root_fs_type()).unwrap();
     // 生成内存文件系统的超级块
-    let mnt = do_kernel_mount("ramfs", MountFlags::MNT_NO_DEV, "", None).unwrap();
+    let mnt = do_kernel_mount("rootfs", MountFlags::MNT_NO_DEV, "", None).unwrap();
     info!("[init_vfs] mnt: {:#?}", mnt);
     // 设置进程的文件系统相关信息
     // for test

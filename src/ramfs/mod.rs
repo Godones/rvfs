@@ -1,22 +1,19 @@
+pub mod rootfs;
+pub mod tmpfs;
+
 use crate::dentrry::DirEntry;
-use crate::file::{generic_file_mmap, FileOps};
-use crate::inode::{
-    create_tmp_inode_from_sb_blk, generic_delete_inode, simple_statfs, Inode, InodeMode, InodeOps,
-};
+use crate::file::FileOps;
+use crate::inode::{create_tmp_inode_from_sb_blk, simple_statfs, Inode, InodeMode, InodeOps};
 use crate::superblock::{FileSystemType, SuperBlock};
-use crate::{
-    find_super_blk, wwarn, DataOps, File, FileMode, FileSystemAttr, MountFlags, StrResult,
-    SuperBlockOps,
-};
+use crate::{find_super_blk, wwarn, DataOps, File, FileMode, MountFlags, StrResult, SuperBlockOps};
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
-
 use core::sync::atomic::AtomicU32;
 use hashbrown::HashMap;
-use lazy_static::lazy_static;
+
 use logger::{info, warn};
 use spin::Mutex;
 
@@ -47,27 +44,12 @@ impl RamFsInode {
     }
 }
 
-lazy_static! {
-    static ref RAM_FS: Mutex<HashMap<u32, RamFsInode>> = Mutex::new(HashMap::new());
-}
-
-pub const fn root_fs_type() -> FileSystemType {
-    let fs_type = FileSystemType {
-        name: "ramfs",
-        fs_flags: FileSystemAttr::empty(),
-        super_blk_s: Vec::new(),
-        get_super_blk: rootfs_get_super_blk,
-        kill_super_blk: rootfs_kill_super_blk,
-    };
-    fs_type
-}
-
 const fn root_fs_sb_blk_ops() -> SuperBlockOps {
     SuperBlockOps {
         alloc_inode: |_| Err("Not support"),
         write_inode: |_, _| {},
         dirty_inode: |_| {},
-        delete_inode: generic_delete_inode,
+        delete_inode: |_| {},
         write_super: |_| {},
         sync_fs: |_| {},
         freeze_fs: |_| {},
@@ -76,28 +58,12 @@ const fn root_fs_sb_blk_ops() -> SuperBlockOps {
     }
 }
 
-const fn root_fs_inode_ops() -> InodeOps {
-    let mut ops = InodeOps::empty();
-    ops.mkdir = rootfs_mkdir;
-    ops.create = rootfs_create;
-    ops
-}
-
-const fn root_fs_file_ops() -> FileOps {
-    let mut ops = FileOps::empty();
-    ops.read = root_fs_read_file;
-    ops.write = root_fs_write_file;
-    ops.mmap = generic_file_mmap;
-    ops.open = |_| Ok(());
-    ops
-}
-
 const RAM_BLOCK_SIZE: u32 = 4096;
 const RAM_FILE_MAX_SIZE: usize = 4096;
 const RAM_MAGIC: u32 = 0x12345678;
 
 /// 创建一个内存文件系统的超级块
-fn create_ram_super_blk(
+fn create_simple_ram_super_blk(
     fs_type: Arc<Mutex<FileSystemType>>,
     flags: MountFlags,
     dev_name: &str,
@@ -124,13 +90,13 @@ fn create_ram_super_blk(
     Ok(sb_blk)
 }
 
-fn rootfs_get_super_blk(
+fn ramfs_simple_super_blk(
     fs_type: Arc<Mutex<FileSystemType>>,
     flags: MountFlags,
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
 ) -> StrResult<Arc<Mutex<SuperBlock>>> {
-    wwarn!("rootfs_get_super_blk");
+    wwarn!("ramfs_simple_super_blk");
     let find_sb_blk = find_super_blk(fs_type.clone(), None);
     let sb_blk = match find_sb_blk {
         // 找到了旧超级快
@@ -138,59 +104,50 @@ fn rootfs_get_super_blk(
         Err(_) => {
             // 没有找到旧超级快需要重新分配
             info!("create new super block for ramfs");
-            let sb_blk = create_ram_super_blk(fs_type.clone(), flags, dev_name, data)?;
+            let sb_blk = create_simple_ram_super_blk(fs_type.clone(), flags, dev_name, data)?;
             sb_blk
         }
     };
-    let inode = create_ram_fs_root_inode(sb_blk.clone(), InodeMode::S_DIR)?;
-    // 根目录硬链接计数不用自增1
-    inode.lock().hard_links -= 1;
-    // 创建目录项
-    let dentry = create_ram_fs_root_dentry(None, inode)?;
-    sb_blk.lock().root = dentry;
-    // 将sb_blk插入到fs_type的链表中
-    fs_type.lock().insert_super_blk(sb_blk.clone());
-    wwarn!("rootfs_get_super_blk end");
+    wwarn!("ramfs_simple_super_blk end");
     Ok(sb_blk)
 }
 
-fn rootfs_kill_super_blk(_super_blk: Arc<Mutex<SuperBlock>>) {}
+fn ramfs_kill_super_blk(_super_blk: Arc<Mutex<SuperBlock>>) {}
 
-/// 创建内存文件系统的inode
-fn create_ram_fs_root_inode(
+/// 创建内存文件系统的根inode
+fn ramfs_create_root_inode(
+    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
     sb_blk: Arc<Mutex<SuperBlock>>,
     mode: InodeMode,
+    inode_ops: InodeOps,
+    file_ops: FileOps,
+    number: u32,
 ) -> StrResult<Arc<Mutex<Inode>>> {
     let inode = create_tmp_inode_from_sb_blk(sb_blk)?;
     let mut inode_lk = inode.lock();
     inode_lk.mode = mode;
     inode_lk.blk_count = 0;
     // 设置inode的编号
-    inode_lk.number = INODE_COUNT.fetch_add(1, core::sync::atomic::Ordering::SeqCst);
+    assert_eq!(number, 0);
+    inode_lk.number = number;
     // TODO 设置uid/gid
     match mode {
         InodeMode::S_DIR => {
-            inode_lk.inode_ops = root_fs_inode_ops();
-            inode_lk.file_ops = root_fs_file_ops();
+            inode_lk.inode_ops = inode_ops;
+            inode_lk.file_ops = file_ops;
             inode_lk.hard_links += 1
         }
-        InodeMode::S_FILE => {
-            inode_lk.inode_ops = root_fs_inode_ops();
-            inode_lk.file_ops = root_fs_file_ops()
-        }
-        _ => {
-            return Err("Not support");
-        }
+        _ => panic!("root inode must be dir"),
     }
     drop(inode_lk);
     // 插入根inode
     let mut ram_inode = RamFsInode::new(mode, FileMode::FMODE_WRITE, 0);
     ram_inode.hard_link -= 1;
-    RAM_FS.lock().insert(0, ram_inode);
+    fs.lock().insert(0, ram_inode);
     Ok(inode)
 }
 
-fn create_ram_fs_root_dentry(
+fn ramfs_create_root_dentry(
     parent: Option<Arc<Mutex<DirEntry>>>,
     inode: Arc<Mutex<Inode>>,
 ) -> StrResult<Arc<Mutex<DirEntry>>> {
@@ -203,16 +160,19 @@ fn create_ram_fs_root_dentry(
     Ok(Arc::new(Mutex::new(dentry)))
 }
 
-fn rootfs_create_inode(
+fn ramfs_create_inode(
+    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
     dir: Arc<Mutex<Inode>>,
     mode: InodeMode,
     attr: FileMode,
+    number: u32,
+    inode_ops: InodeOps,
+    file_ops: FileOps,
 ) -> StrResult<Arc<Mutex<Inode>>> {
-    wwarn!("rootfs_mkdir");
-    let number = INODE_COUNT.fetch_add(1, core::sync::atomic::Ordering::SeqCst);
+    wwarn!("ramfs_create_inode");
     // 创建raminode
     let ram_inode = RamFsInode::new(mode, attr, number);
-    RAM_FS.lock().insert(number, ram_inode.clone());
+    fs.lock().insert(number, ram_inode.clone());
 
     // 根据ramfs的inode创建inode
     let sb_blk = dir.lock().super_blk.upgrade().unwrap().clone();
@@ -224,14 +184,15 @@ fn rootfs_create_inode(
     inode_lock.hard_links = ram_inode.hard_link;
     inode_lock.mode = ram_inode.mode;
     inode_lock.inode_ops = match ram_inode.mode {
-        InodeMode { .. } => root_fs_inode_ops(),
+        InodeMode { .. } => inode_ops,
     };
     // TODO 根据文件类型设置inode的操作
     inode_lock.file_ops = match ram_inode.mode {
-        InodeMode { .. } => root_fs_file_ops(),
+        InodeMode { .. } => file_ops,
     };
     inode_lock.file_size = ram_inode.data.len();
     drop(inode_lock);
+    wwarn!("ramfs_create_inode end");
     Ok(inode)
 }
 
@@ -239,37 +200,58 @@ fn rootfs_create_inode(
 /// * dir: 父目录的inode
 /// * dentry: 需要填充的目录项
 /// * attr: 目录的属性
-fn rootfs_mkdir(
+fn ramfs_mkdir(
+    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
     dir: Arc<Mutex<Inode>>,
     dentry: Arc<Mutex<DirEntry>>,
     attr: FileMode,
+    number: u32,
+    inode_ops: InodeOps,
+    file_ops: FileOps,
 ) -> StrResult<()> {
-    wwarn!("rootfs_mkdir");
-    let inode = rootfs_create_inode(dir, InodeMode::S_DIR, attr)?;
+    wwarn!("ramfs_mkdir");
+    let inode = ramfs_create_inode(fs, dir, InodeMode::S_DIR, attr, number, inode_ops, file_ops)?;
     dentry.lock().d_inode = inode;
-    wwarn!("rootfs_mkdir end");
+    wwarn!("ramfs_mkdir end");
     Ok(())
 }
 
 /// 创建内存文件系统的文件并返回目录项
-fn rootfs_create(
+fn ramfs_create(
+    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
     dir: Arc<Mutex<Inode>>,
     dentry: Arc<Mutex<DirEntry>>,
     mode: FileMode,
+    number: u32,
+    inode_ops: InodeOps,
+    file_ops: FileOps,
 ) -> StrResult<()> {
     wwarn!("rootfs_create");
-    let inode = rootfs_create_inode(dir, InodeMode::S_FILE, mode)?;
+    let inode = ramfs_create_inode(
+        fs,
+        dir,
+        InodeMode::S_FILE,
+        mode,
+        number,
+        inode_ops,
+        file_ops,
+    )?;
     dentry.lock().d_inode = inode;
     wwarn!("rootfs_create end");
     Ok(())
 }
 
-fn root_fs_read_file(file: Arc<Mutex<File>>, buf: &mut [u8], offset: u64) -> StrResult<usize> {
+fn ramfs_read_file(
+    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    file: Arc<Mutex<File>>,
+    buf: &mut [u8],
+    offset: u64,
+) -> StrResult<usize> {
     let dentry = &mut file.lock().f_dentry;
     let inode = &mut dentry.lock().d_inode;
     // 获取inode的编号
     let number = inode.lock().number;
-    let mut binding = RAM_FS.lock();
+    let mut binding = fs.lock();
     let ram_inode = binding.get_mut(&number).unwrap();
     let read_len = core::cmp::min(
         buf.len(),
@@ -285,12 +267,17 @@ fn root_fs_read_file(file: Arc<Mutex<File>>, buf: &mut [u8], offset: u64) -> Str
     Ok(read_len)
 }
 
-fn root_fs_write_file(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResult<usize> {
+fn ramfs_write_file(
+    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    file: Arc<Mutex<File>>,
+    buf: &[u8],
+    offset: u64,
+) -> StrResult<usize> {
     let dentry = &mut file.lock().f_dentry;
     let inode = &mut dentry.lock().d_inode;
     // 获取inode的编号
     let number = inode.lock().number;
-    let mut binding = RAM_FS.lock();
+    let mut binding = fs.lock();
     let ram_inode = binding.get_mut(&number).unwrap();
     if offset as usize + buf.len() > ram_inode.data.len() {
         ram_inode.data.resize(offset as usize + buf.len(), 0);

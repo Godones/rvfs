@@ -1,7 +1,8 @@
 use logger::{info, init_logger};
+use rvfs::ramfs::tmpfs::tmp_fs_type;
 use rvfs::{
-    init_vfs, open_file, path_walk, read_file, vfs_mkdir, write_file, FakeFSC, FileFlags,
-    FileMode, LookUpFlags,
+    do_kernel_mount, init_vfs, path_walk, register_filesystem, vfs_mkdir, vfs_open_file,
+    vfs_read_file, vfs_write_file, FakeFSC, FileFlags, FileMode, LookUpFlags, MountFlags,
 };
 
 fn main() {
@@ -20,7 +21,7 @@ fn main() {
     // println!("file: {:#?}",file);
 
     // open or create file
-    let file = open_file::<FakeFSC>(
+    let file = vfs_open_file::<FakeFSC>(
         "/f1",
         FileFlags::O_RDWR | FileFlags::O_CREAT,
         FileMode::FMODE_WRITE,
@@ -28,14 +29,15 @@ fn main() {
     .unwrap();
     println!("file: {:#?}", file);
 
-    // test mount
-    // println!("--------------------------------------");
-    // do_mount::<FakeFSC>("","/tmp", "ramfs", MountFlags::MNT_NO_DEV, None).unwrap();
-
     // test read / write
     let mut buf = [0u8; 10];
-    write_file::<FakeFSC>(file.clone(), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].as_ref(), 0).unwrap();
-    let _read = read_file::<FakeFSC>(file, buf.as_mut(), 0).unwrap();
-
+    vfs_write_file::<FakeFSC>(file.clone(), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].as_ref(), 0).unwrap();
+    let _read = vfs_read_file::<FakeFSC>(file, buf.as_mut(), 0).unwrap();
     println!("read: {:?}", buf);
+
+    // 注册tmpfs，实际上也是一个内存文件系统，但这里的实现将其与rootfs分开了
+    println!("----------------------------------------");
+    println!("register tmpfs ok....");
+    register_filesystem(tmp_fs_type()).unwrap();
+    let _mnt = do_kernel_mount("tmpfs", MountFlags::MNT_NO_DEV, "", None).unwrap();
 }
