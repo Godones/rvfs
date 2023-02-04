@@ -1,14 +1,14 @@
 use crate::dentrry::{path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags, ProcessFs};
 use crate::inode::{InodeFlags, InodeMode};
 use crate::superblock::{lookup_filesystem, DataOps, SuperBlock};
-use crate::{iinfo, StrResult, GLOBAL_HASH_MOUNT};
+use crate::{wwarn, StrResult, GLOBAL_HASH_MOUNT};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use logger::info;
+use logger::{info, warn};
 use spin::Mutex;
 
 bitflags! {
@@ -108,6 +108,7 @@ pub fn do_mount<T: ProcessFs>(
     flags: MountFlags,
     data: Option<Box<dyn DataOps>>,
 ) -> StrResult<()> {
+    wwarn!("do_mount");
     //检查路径名是否为空
     if dir_name.is_empty() {
         return Err("Dirname is empty");
@@ -130,8 +131,10 @@ pub fn do_mount<T: ProcessFs>(
     if ret.is_err() {
         return Err("Can't find mount dir");
     }
+    info!("**do_mount: path_walk ok");
     let lookup_data = ret.unwrap();
     let ret = do_add_mount(&lookup_data, fs_type, flags, mnt_flags, dev_name, data);
+    wwarn!("do_mount end");
     ret
 }
 
@@ -143,6 +146,7 @@ fn do_add_mount(
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
 ) -> StrResult<()> {
+    wwarn!("do_add_mount");
     if fs_type.len() == 0 {
         return Err("fs_type is empty");
     }
@@ -174,6 +178,7 @@ pub fn do_kernel_mount(
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
 ) -> Result<Arc<Mutex<VfsMount>>, &'static str> {
+    wwarn!("do_kernel_mount");
     let fs_type = lookup_filesystem(fs_type);
     // 错误的文件系统类型
     if fs_type.is_none() {
@@ -183,7 +188,6 @@ pub fn do_kernel_mount(
     // 从设备读取文件系统超级块数据
     let get_sb_func = fs_type.lock().get_super_blk;
 
-    iinfo!("do_kernel_mount");
     let super_blk = (get_sb_func)(fs_type, flags, dev_name, data)?;
 
     // 分配挂载点描述符
@@ -193,6 +197,7 @@ pub fn do_kernel_mount(
     // 将parent指向自身，表示它是一个独立的根
     let parent = Arc::downgrade(&mount);
     mount.lock().parent = parent;
+    wwarn!("do_kernel_mount end");
     Ok(mount)
 }
 /// 挂载到系统目录中

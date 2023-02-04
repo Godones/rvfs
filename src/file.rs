@@ -171,11 +171,11 @@ pub fn read_file<T: ProcessFs>(
     buf: &mut [u8],
     offset: u64,
 ) -> StrResult<usize> {
-    let read = file.lock().f_ops.read;
     let mode = file.lock().f_mode;
     if !mode.contains(FileMode::FMODE_READ) {
         return Err("file not open for reading");
     }
+    let read = file.lock().f_ops.read;
     let res = read(file.clone(), buf, offset);
     res
 }
@@ -228,12 +228,18 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     Ok(())
 }
 
+/// 删除文件
 pub fn vfs_unlink() {
     unimplemented!()
 }
 
+/// 创建符号链接
+pub fn vfs_link() {
+    unimplemented!()
+}
+
 pub fn generic_file_read(
-    file: Arc<Mutex<File>>,
+    _file: Arc<Mutex<File>>,
     _buf: &mut [u8],
     _offset: u64,
 ) -> StrResult<usize> {

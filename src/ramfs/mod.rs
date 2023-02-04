@@ -1,11 +1,11 @@
 use crate::dentrry::DirEntry;
-use crate::file::{generic_file_mmap, generic_file_read, generic_file_write, FileOps};
+use crate::file::{generic_file_mmap, FileOps};
 use crate::inode::{
     create_tmp_inode_from_sb_blk, generic_delete_inode, simple_statfs, Inode, InodeMode, InodeOps,
 };
 use crate::superblock::{FileSystemType, SuperBlock};
 use crate::{
-    find_super_blk, iinfo, wwarn, DataOps, FileMode, FileSystemAttr, MountFlags, StrResult,
+    find_super_blk, wwarn, DataOps, File, FileMode, FileSystemAttr, MountFlags, StrResult,
     SuperBlockOps,
 };
 use alloc::boxed::Box;
@@ -85,8 +85,8 @@ const fn root_fs_inode_ops() -> InodeOps {
 
 const fn root_fs_file_ops() -> FileOps {
     let mut ops = FileOps::empty();
-    ops.read = generic_file_read;
-    ops.write = generic_file_write;
+    ops.read = root_fs_read_file;
+    ops.write = root_fs_write_file;
     ops.mmap = generic_file_mmap;
     ops.open = |_| Ok(());
     ops
@@ -130,14 +130,14 @@ fn rootfs_get_super_blk(
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
 ) -> StrResult<Arc<Mutex<SuperBlock>>> {
+    wwarn!("rootfs_get_super_blk");
     let find_sb_blk = find_super_blk(fs_type.clone(), None);
-    iinfo!("rootfs_get_super_blk");
     let sb_blk = match find_sb_blk {
         // 找到了旧超级快
         Ok(sb_blk) => sb_blk,
         Err(_) => {
             // 没有找到旧超级快需要重新分配
-            iinfo!("create new super block for ramfs");
+            info!("create new super block for ramfs");
             let sb_blk = create_ram_super_blk(fs_type.clone(), flags, dev_name, data)?;
             sb_blk
         }
@@ -150,6 +150,7 @@ fn rootfs_get_super_blk(
     sb_blk.lock().root = dentry;
     // 将sb_blk插入到fs_type的链表中
     fs_type.lock().insert_super_blk(sb_blk.clone());
+    wwarn!("rootfs_get_super_blk end");
     Ok(sb_blk)
 }
 
@@ -212,6 +213,7 @@ fn rootfs_create_inode(
     // 创建raminode
     let ram_inode = RamFsInode::new(mode, attr, number);
     RAM_FS.lock().insert(number, ram_inode.clone());
+
     // 根据ramfs的inode创建inode
     let sb_blk = dir.lock().super_blk.upgrade().unwrap().clone();
     // 创建inode
@@ -260,4 +262,45 @@ fn rootfs_create(
     dentry.lock().d_inode = inode;
     wwarn!("rootfs_create end");
     Ok(())
+}
+
+fn root_fs_read_file(file: Arc<Mutex<File>>, buf: &mut [u8], offset: u64) -> StrResult<usize> {
+    let dentry = &mut file.lock().f_dentry;
+    let inode = &mut dentry.lock().d_inode;
+    // 获取inode的编号
+    let number = inode.lock().number;
+    let mut binding = RAM_FS.lock();
+    let ram_inode = binding.get_mut(&number).unwrap();
+    let read_len = core::cmp::min(
+        buf.len(),
+        ram_inode.data.len().saturating_sub(offset as usize),
+    );
+    unsafe {
+        core::ptr::copy(
+            ram_inode.data.as_ptr().add(offset as usize),
+            buf.as_mut_ptr(),
+            read_len,
+        );
+    }
+    Ok(read_len)
+}
+
+fn root_fs_write_file(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResult<usize> {
+    let dentry = &mut file.lock().f_dentry;
+    let inode = &mut dentry.lock().d_inode;
+    // 获取inode的编号
+    let number = inode.lock().number;
+    let mut binding = RAM_FS.lock();
+    let ram_inode = binding.get_mut(&number).unwrap();
+    if offset as usize + buf.len() > ram_inode.data.len() {
+        ram_inode.data.resize(offset as usize + buf.len(), 0);
+    }
+    unsafe {
+        core::ptr::copy(
+            buf.as_ptr(),
+            ram_inode.data.as_mut_ptr().add(offset as usize),
+            buf.len(),
+        );
+    }
+    Ok(buf.len())
 }
