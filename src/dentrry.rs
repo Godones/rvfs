@@ -6,7 +6,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use logger::{info, warn};
+use logger::{error, info, warn};
 use spin::Mutex;
 
 bitflags! {
@@ -303,6 +303,7 @@ fn __generic_load_dentry<T: ProcessFs>(
             }
         }
         // 在当前目录中搜索下一个分量。
+        info!("try find {} in current dir",component);
         let (mut next_mnt, mut next_dentry) = find_file_indir(lookup_data, component)?;
         // TODO 向前推进到当前目录最后一个安装点
         // 查找得到的目录可能依次挂载了很多文件系统
@@ -525,12 +526,14 @@ pub fn advance_mount(
     let mut mount_count = next_dentry.lock().mount_count;
     let mut t_mnt = mnt.clone();
     let mut t_dentry = next_dentry.clone();
+    info!("dentry:{:#?}",t_dentry);
     while mount_count > 0 {
         // 挂载点的根目录的mount_count必须大于0
         let child_mnt = lookup_mount(t_mnt.clone(), t_dentry.clone());
         if child_mnt.is_err() {
             break;
         }
+        info!("step into next mount point");
         t_mnt = child_mnt.unwrap();
         t_dentry = t_mnt.lock().root.clone();
         mount_count = t_dentry.lock().mount_count;
@@ -555,7 +558,7 @@ fn lookup_mount(
             //  此挂载点的父挂载点是当前挂载点并且挂载点的根目录是参数指定
             if parent.is_some()
                 && Arc::ptr_eq(&parent.unwrap(), &mnt)
-                && Arc::ptr_eq(&x.root, &next_dentry)
+                && Arc::ptr_eq(&x.mount_point, &next_dentry)
             {
                 true
             } else {

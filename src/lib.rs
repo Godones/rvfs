@@ -50,7 +50,7 @@ pub fn init_vfs() {
     register_filesystem(root_fs_type()).unwrap();
     // 生成内存文件系统的超级块
     let mnt = do_kernel_mount("rootfs", MountFlags::MNT_NO_DEV, "", None).unwrap();
-    info!("[init_vfs] mnt: {:#?}", mnt);
+    // info!("[init_vfs] mnt: {:#?}", mnt);
     // 设置进程的文件系统相关信息
     // for test
     PROCESS_FS_CONTEXT.lock().cwd = mnt.lock().root.clone();

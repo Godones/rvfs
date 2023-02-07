@@ -107,7 +107,7 @@ pub fn do_mount<T: ProcessFs>(
     fs_type: &str,
     flags: MountFlags,
     data: Option<Box<dyn DataOps>>,
-) -> StrResult<()> {
+) -> StrResult<Arc<Mutex<VfsMount>>> {
     wwarn!("do_mount");
     //检查路径名是否为空
     if dir_name.is_empty() {
@@ -145,13 +145,14 @@ fn do_add_mount(
     mnt_flags: MountFlags,
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
-) -> StrResult<()> {
+) -> StrResult<Arc<Mutex<VfsMount>>> {
     wwarn!("do_add_mount");
     if fs_type.len() == 0 {
         return Err("fs_type is empty");
     }
     // 加载文件系统超级块
     let mount = do_kernel_mount(fs_type, flags, dev_name, data)?;
+    info!("**do_add_mount: do_kernel_mount ok");
     // 检查是否对用户空间不可见
     if mount
         .lock()
@@ -164,11 +165,8 @@ fn do_add_mount(
     }
     // 挂载系统目录
     mount.lock().flag = mnt_flags;
-    let res = check_and_graft_tree(mount, look);
-    if res.is_err() {
-        return Err("graft error");
-    }
-    Ok(())
+    info!("**do_add_mount: mount.lock().flag = mnt_flags ok");
+    check_and_graft_tree(mount, look)
 }
 
 /// 生成一个挂载点
@@ -201,7 +199,11 @@ pub fn do_kernel_mount(
     Ok(mount)
 }
 /// 挂载到系统目录中
-fn check_and_graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<()> {
+fn check_and_graft_tree(
+    new_mount: Arc<Mutex<VfsMount>>,
+    look: &LookUpData,
+) -> StrResult<Arc<Mutex<VfsMount>>> {
+    wwarn!("check_and_graft_tree");
     let mut global_mount_lock = GLOBAL_HASH_MOUNT.write();
     // 如果文件系统已经被安装在指定的安装点上，
     // let mnt = look.mnt.lock();
@@ -210,7 +212,6 @@ fn check_and_graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> S
     let t_new_mnt = new_mount.lock();
     // let new_sb_ref = t_new_mnt.super_block.as_ref().unwrap();
     // let eq = Arc::ptr_eq(find_sb_ref, new_sb_ref);
-
     // if eq && root_eq {
     //     return Err("fs exist");
     // }
@@ -224,15 +225,17 @@ fn check_and_graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> S
         .mode
         .contains(InodeMode::S_IFLNK)
     {
-        return Err("link exist");
+        return Err("mnt is symlink");
     }
     drop(t_new_mnt);
-    let res = graft_tree(new_mount.clone(), look);
+    graft_tree(new_mount.clone(), look)?;
     global_mount_lock.push(new_mount.clone());
-    res
+    wwarn!("check_and_graft_tree end");
+    Ok(new_mount)
 }
 
 fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<()> {
+    wwarn!("graft_tree");
     // mount点应该是目录
     // 被mount的对象也应当(根)目录
     if !look
@@ -253,11 +256,11 @@ fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<(
     {
         return Err("not dir");
     }
+    info!("**graft_tree: check dir ok");
     // 目录被删除了(但是内存中还存在)
-    let inode = look.dentry.lock();
-    let inode = inode.d_inode.lock();
+    let dentry = look.dentry.lock();
+    let inode = dentry.d_inode.lock();
     if inode.flags.contains(InodeFlags::S_DEL) {
-        drop(inode);
         return Err("inode del");
     }
 
@@ -266,13 +269,19 @@ fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<(
      * 2、如果目录还在缓存哈希表中，说明它是有效的，可mount
      * 否则不能mount
      */
+    drop(inode);
+    drop(dentry);
     let in_cache = look.dentry.lock().d_flags.contains(DirFlags::IN_HASH);
 
+    info!("**graft_tree: check in_cache ok");
+
+    // TODO 修改判断挂载点可用的条件
     let c = look.dentry.clone();
     let p = look.dentry.lock().parent.upgrade().unwrap();
     if !in_cache && Arc::ptr_eq(&c, &p) {
         return Err("not in cache");
     }
+
     // 设置父节点以及挂载点目录对象
     new_mount.lock().parent = Arc::downgrade(&look.mnt);
     new_mount.lock().mount_point = look.dentry.clone();
@@ -280,6 +289,10 @@ fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<(
     look.mnt.lock().inert_child(new_mount.clone());
     look.dentry.lock().mount_count += 1;
 
+    // info!("parent: {:#?}", look.mnt);
+    // info!("child: {:#?}", new_mount);
+
+    wwarn!("graft_tree end");
     Ok(())
 }
 

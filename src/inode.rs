@@ -18,7 +18,7 @@ bitflags! {
     pub struct InodeMode:u32{
         const S_IFLNK = 0x1;
         const S_DIR = 0x2;
-        const S_FILE = 0x3;
+        const S_FILE = 0x4;
     }
 }
 

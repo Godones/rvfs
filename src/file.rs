@@ -62,22 +62,22 @@ impl File {
 
 bitflags! {
     pub struct FileFlags:u32{
-        const O_RDONLY = 0x0;
-        const O_WRONLY = 0x1;
-        const O_RDWR = 0x2;
-        const O_CREAT = 0x3;
-        const O_EXCL = 0x4;
-        const O_TRUNC = 0x5;
-        const O_APPEND = 0x6;
-        const O_DIRECTORY = 0x7;
-        const O_NOFOLLOW = 0x8;
-        const O_CLOEXEC = 0x9;
+        const O_RDONLY = 0x1;
+        const O_WRONLY = 0x2;
+        const O_RDWR = 0x3;
+        const O_CREAT = 0x4;
+        const O_EXCL = 0x8;
+        const O_TRUNC = 0x10;
+        const O_APPEND = 0x20;
+        const O_DIRECTORY = 0x40;
+        const O_NOFOLLOW = 0x80;
+        const O_CLOEXEC = 0x100;
     }
 }
 bitflags! {
     pub struct FileMode:u32{
-        const FMODE_READ = 0x0;
-        const FMODE_WRITE = 0x1;
+        const FMODE_READ = 0x1;
+        const FMODE_WRITE = 0x2;
     }
 }
 
@@ -316,7 +316,6 @@ pub fn open_dentry<T: ProcessFs>(
     info!("{:?} -> {:?}", flags, Into::<LookUpFlags>::into(flags));
 
     // TODO 根据路径从缓存中直接查找
-
     // 只打开文件而不创建
     if !flags.contains(FileFlags::O_CREAT) {
         let res = path_walk::<T>(name, flags.into())?;
@@ -364,6 +363,10 @@ fn __recognize_last<T: ProcessFs>(
         // 设置dentry信息
         target_dentry.lock().d_name = lookup_data.last.clone();
         target_dentry.lock().parent = Arc::downgrade(&lookup_data.dentry);
+        lookup_data
+            .dentry
+            .lock()
+            .insert_child(target_dentry.clone());
 
         lookup_data.dentry = target_dentry;
         let mut flags = flags;

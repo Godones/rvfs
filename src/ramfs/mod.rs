@@ -11,13 +11,10 @@ use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::sync::atomic::AtomicU32;
 use hashbrown::HashMap;
 
 use logger::{info, warn};
 use spin::Mutex;
-
-static INODE_COUNT: AtomicU32 = AtomicU32::new(0);
 
 #[derive(Clone)]
 pub struct RamFsInode {
