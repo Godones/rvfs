@@ -6,8 +6,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use logger::{error, info, warn};
+use logger::{info, warn};
 use spin::Mutex;
+use crate::info::ProcessFs;
 
 bitflags! {
     pub struct DirFlags:u32{
@@ -73,6 +74,9 @@ impl DirEntry {
     pub fn insert_child(&mut self, child: Arc<Mutex<DirEntry>>) {
         self.children.push(child);
     }
+    pub fn remove_child(&mut self, child_name:&str) {
+        self.children.retain(|x| !x.lock().d_name.eq(child_name));
+    }
 }
 
 pub struct DirEntryOps {
@@ -104,46 +108,13 @@ impl DirEntryOps {
 }
 
 pub struct DirContext {}
-/// 进程需要提供的信息
-///
-/// 由于vfs模块与内核模块分离了，所以需要进程提供一些信息
 
-pub struct ProcessFsInfo {
-    pub root_mount: Arc<Mutex<VfsMount>>,
-    pub root_dir: Arc<Mutex<DirEntry>>,
-    pub current_dir: Arc<Mutex<DirEntry>>,
-    pub current_mount: Arc<Mutex<VfsMount>>,
-}
-impl ProcessFsInfo {
-    pub fn new(
-        root_mount: Arc<Mutex<VfsMount>>,
-        root_dir: Arc<Mutex<DirEntry>>,
-        current_dir: Arc<Mutex<DirEntry>>,
-        current_mount: Arc<Mutex<VfsMount>>,
-    ) -> ProcessFsInfo {
-        ProcessFsInfo {
-            root_mount,
-            root_dir,
-            current_dir,
-            current_mount,
-        }
-    }
-}
-pub trait ProcessFs {
-    // 调用此函数时进程应该保证数据中间没有被修改
-    fn get_fs_info() -> ProcessFsInfo;
-    // 检查进程的链接文件嵌套查询深度是否超过最大值
-    fn check_nested_link() -> bool;
-    // 更新进程链接文件的相关数据： 嵌套查询深度/ 调用链接查找的次数
-    fn update_link_data();
-    fn max_link_count() -> u32;
-}
 
 bitflags! {
     pub struct LookUpFlags:u32{
-        const READ_LINK = 1;
-        const DIRECTORY = 2;
-        const NOLAST = 3;
+        const READ_LINK = 0x1;
+        const DIRECTORY = 0x2;
+        const NOLAST = 0x4;
     }
 }
 
@@ -151,8 +122,8 @@ bitflags! {
     pub struct PathType:u32{
         const PATH_ROOT = 0x1;
         const PATH_NORMAL = 0x2;
-        const PATH_DOT = 0x3;
-        const PATH_DOTDOT = 0x4;
+        const PATH_DOT = 0x4;
+        const PATH_DOTDOT = 0x8;
     }
 }
 #[derive(Clone, Debug)]
@@ -455,6 +426,10 @@ pub fn find_file_indir(
     name: &str,
 ) -> StrResult<(Arc<Mutex<VfsMount>>, Arc<Mutex<DirEntry>>)> {
     wwarn!("find_file_indir");
+    // 检查是否是在目录下查找
+    if !lookup_data.dentry.lock().d_inode.lock().mode == InodeMode::S_DIR {
+        return Err("not a dir");
+    }
     // 先在缓存中搜索，看看文件是否存在
     let mut dentry = __find_in_cache(lookup_data.dentry.clone(), name);
     // 在缓存中没有找到

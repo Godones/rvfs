@@ -1,6 +1,6 @@
 use crate::dentrry::{
     __advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry, LookUpData,
-    LookUpFlags, PathType, ProcessFs,
+    LookUpFlags, PathType,
 };
 use crate::inode::{Inode, InodeMode};
 use crate::{wwarn, StrResult, VfsMount};
@@ -9,6 +9,7 @@ use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use logger::{info, warn};
 use spin::Mutex;
+use crate::info::ProcessFs;
 
 pub struct File {
     pub f_dentry: Arc<Mutex<DirEntry>>,
@@ -228,15 +229,6 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     Ok(())
 }
 
-/// 删除文件
-pub fn vfs_unlink() {
-    unimplemented!()
-}
-
-/// 创建符号链接
-pub fn vfs_link() {
-    unimplemented!()
-}
 
 pub fn generic_file_read(
     _file: Arc<Mutex<File>>,

@@ -9,6 +9,7 @@ use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 
 use spin::Mutex;
+use crate::stat::FileAttribute;
 
 bitflags! {
     pub struct InodeFlags:u32{
@@ -77,6 +78,12 @@ pub struct InodeOps {
     /// mkdir(dir, dentry, mode)  在某个目录下，为与目录项对应的目录创建一个新的索引节点
     pub mkdir:
         fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, mode: FileMode) -> StrResult<()>,
+    /// 在某个目录下，创建一个硬链接
+    pub link: fn(old_dentry:Arc<Mutex<DirEntry>>,dir:Arc<Mutex<Inode>>,new_dentry:Arc<Mutex<DirEntry>>)->StrResult<()>,
+    /// 在某个目录下，删除一个硬链接
+    pub unlink: fn(dir:Arc<Mutex<Inode>>,dentry:Arc<Mutex<DirEntry>>)->StrResult<()>,
+
+    pub get_attr:fn (dentry:Arc<Mutex<DirEntry>>)->StrResult<FileAttribute>,
 }
 impl Debug for InodeOps {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
@@ -91,6 +98,9 @@ impl InodeOps {
             lookup: |_, _| Err("NOT SUPPORT"),
             create: |_, _, _| Err("NOT SUPPORT"),
             mkdir: |_, _, _| Err("NOT SUPPORT"),
+            link: |_,_,_|Err("NOT SUPPORT"),
+            unlink: |_,_|Err("NOT SUPPORT"),
+            get_attr: |_|Err("NOT SUPPORT"),
         }
     }
 }

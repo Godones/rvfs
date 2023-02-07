@@ -9,9 +9,12 @@ mod inode;
 mod mount;
 pub mod ramfs;
 mod superblock;
+mod link;
+mod info;
+mod stat;
 
 extern crate alloc;
-use crate::dentrry::{DirEntry, ProcessFs, ProcessFsInfo};
+use crate::dentrry::{DirEntry};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -26,8 +29,11 @@ use crate::ramfs::rootfs::root_fs_type;
 pub use dentrry::*;
 pub use file::*;
 pub use superblock::*;
+use crate::info::{ProcessFs, ProcessFsInfo};
 
 pub type StrResult<T> = Result<T, &'static str>;
+
+
 
 lazy_static! {
     pub static ref SUPERBLOCKS: Mutex<Vec<SuperBlock>> = Mutex::new(Vec::new());
@@ -93,13 +99,10 @@ impl ProcessFs for FakeFSC {
             lock.cmnt.clone(),
         )
     }
-
     fn check_nested_link() -> bool {
         false
     }
-
     fn update_link_data() {}
-
     fn max_link_count() -> u32 {
         0
     }
