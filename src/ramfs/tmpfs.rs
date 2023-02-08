@@ -137,7 +137,7 @@ fn tmpfs_link(
     new_dentry: Arc<Mutex<DirEntry>>,
 ) -> StrResult<()> {
     wwarn!("tmpfs_link");
-    let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
+    let _number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_link(TMP_FS.clone(), old_dentry, dir, new_dentry)?;
     wwarn!("tmpfs_link end");
     Ok(())

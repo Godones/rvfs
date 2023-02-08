@@ -1,6 +1,10 @@
 use logger::init_logger;
 use rvfs::ramfs::tmpfs::tmp_fs_type;
-use rvfs::{do_mount, init_vfs, lookup_filesystem, path_walk, register_filesystem, vfs_link, vfs_mkdir, vfs_open_file, vfs_read_file, vfs_write_file, FakeFSC, FileFlags, FileMode, LookUpFlags, MountFlags, vfs_unlink, vfs_stat};
+use rvfs::{
+    do_mount, init_vfs, path_walk, register_filesystem, vfs_link, vfs_mkdir, vfs_open_file,
+    vfs_read_file, vfs_stat, vfs_unlink, vfs_write_file, FakeFSC, FileFlags, FileMode, LookUpFlags,
+    MountFlags,
+};
 
 fn main() {
     init_logger();

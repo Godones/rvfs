@@ -137,7 +137,7 @@ fn rootfs_link(
     new_dentry: Arc<Mutex<DirEntry>>,
 ) -> StrResult<()> {
     wwarn!("rootfs_link");
-    let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
+    let _number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_link(ROOT_FS.clone(), old_dentry, dir, new_dentry)?;
     wwarn!("rootfs_link end");
     Ok(())

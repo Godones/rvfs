@@ -306,7 +306,7 @@ fn ramfs_link(
 
     drop(old_inode_lock);
     new_dentry.lock().d_inode = old_inode;
-    let mut dir_lock = dir.lock();
+    let dir_lock = dir.lock();
     assert_eq!(dir_lock.mode, InodeMode::S_DIR);
     // TODO dir目录下需要增加一个(磁盘)目录项
     wwarn!("ramfs_link end");
@@ -319,9 +319,9 @@ fn ramfs_unlink(
     dentry: Arc<Mutex<DirEntry>>,
 ) -> StrResult<()> {
     wwarn!("ramfs_unlink");
-    let mut dir_lock = dir.lock();
+    let dir_lock = dir.lock();
     assert_eq!(dir_lock.mode, InodeMode::S_DIR);
-    let name = dentry.lock().d_name.clone();
+    let _name = dentry.lock().d_name.clone();
     // TODO dir目录下需要删除一个(磁盘)目录项
     let inode = dentry.lock().d_inode.clone();
     let mut inode_lock = inode.lock();

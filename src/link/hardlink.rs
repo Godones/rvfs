@@ -58,7 +58,10 @@ pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
         return Err("vfs_link: new path not found");
     }
     let mut new_lookup_data = new_lookup_data.unwrap();
-    info!("vfs_link: new_lookup_data.path_type = {:?}", new_lookup_data.path_type);
+    info!(
+        "vfs_link: new_lookup_data.path_type = {:?}",
+        new_lookup_data.path_type
+    );
     if new_lookup_data.path_type != PathType::PATH_NORMAL {
         return Err("It is not a normal path");
     }
