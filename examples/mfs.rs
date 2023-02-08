@@ -1,10 +1,6 @@
 use logger::init_logger;
 use rvfs::ramfs::tmpfs::tmp_fs_type;
-use rvfs::{
-    do_mount, init_vfs, lookup_filesystem, path_walk, register_filesystem, vfs_mkdir,
-    vfs_open_file, vfs_read_file, vfs_write_file, FakeFSC, FileFlags, FileMode, LookUpFlags,
-    MountFlags,
-};
+use rvfs::{do_mount, init_vfs, lookup_filesystem, path_walk, register_filesystem, vfs_link, vfs_mkdir, vfs_open_file, vfs_read_file, vfs_write_file, FakeFSC, FileFlags, FileMode, LookUpFlags, MountFlags, vfs_unlink, vfs_stat};
 
 fn main() {
     init_logger();
@@ -67,5 +63,29 @@ fn main() {
     vfs_mkdir::<FakeFSC>("/tmp/tt1", FileMode::FMODE_WRITE).unwrap();
     println!("mkdir /tmp/tt1 ok ......");
 
-    println!("{:#?}", tmpfs);
+    let temp_find = path_walk::<FakeFSC>("/tmp/tt1", LookUpFlags::DIRECTORY).unwrap();
+    println!("temp_find: {:#?}", temp_find.dentry);
+    // println!("{:#?}", tmpfs);
+    println!("---------------------------------------");
+    println!("test vfs_link");
+    vfs_link::<FakeFSC>("/f1", "/f2").unwrap();
+    println!("test vfs_link ok ......");
+    println!("----------------------------------------");
+    let f1_lookup = path_walk::<FakeFSC>("/f1", LookUpFlags::READ_LINK).unwrap();
+    let f2_lookup = path_walk::<FakeFSC>("/f2", LookUpFlags::READ_LINK).unwrap();
+    println!("f1_lookup: {:#?}", f1_lookup.dentry);
+    println!("f2_lookup: {:#?}", f2_lookup.dentry);
+
+    println!("-----------------------------------------");
+    vfs_unlink::<FakeFSC>("/f2").unwrap();
+    let f2_lookup = path_walk::<FakeFSC>("/f2", LookUpFlags::READ_LINK);
+    assert_eq!(f2_lookup.is_err(), true);
+    let f1_lookup = path_walk::<FakeFSC>("/f1", LookUpFlags::READ_LINK).unwrap();
+    assert_eq!(f1_lookup.dentry.lock().d_inode.lock().hard_links, 1);
+
+    let file_attr = vfs_stat::<FakeFSC>("/f1").unwrap();
+    println!("file_attr: {:#?}", file_attr);
+
+    let dir_attr = vfs_stat::<FakeFSC>("/").unwrap();
+    println!("dir_attr: {:#?}", dir_attr);
 }

@@ -5,16 +5,16 @@
 
 mod dentrry;
 mod file;
+mod info;
 mod inode;
+mod link;
 mod mount;
 pub mod ramfs;
-mod superblock;
-mod link;
-mod info;
 mod stat;
+mod superblock;
 
 extern crate alloc;
-use crate::dentrry::{DirEntry};
+use crate::dentrry::DirEntry;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -25,15 +25,15 @@ pub use mount::*;
 use spin::{Mutex, RwLock};
 use superblock::SuperBlock;
 
+use crate::info::{ProcessFs, ProcessFsInfo};
 use crate::ramfs::rootfs::root_fs_type;
 pub use dentrry::*;
 pub use file::*;
 pub use superblock::*;
-use crate::info::{ProcessFs, ProcessFsInfo};
 
+pub use link::*;
+pub use stat::*;
 pub type StrResult<T> = Result<T, &'static str>;
-
-
 
 lazy_static! {
     pub static ref SUPERBLOCKS: Mutex<Vec<SuperBlock>> = Mutex::new(Vec::new());

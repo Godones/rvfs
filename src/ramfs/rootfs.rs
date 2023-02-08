@@ -1,10 +1,10 @@
 use crate::dentrry::DirEntry;
 use crate::inode::{Inode, InodeMode, InodeOps};
-use crate::ramfs::RamFsInode;
 use crate::ramfs::{
     ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk,
     ramfs_mkdir, ramfs_read_file, ramfs_simple_super_blk, ramfs_write_file,
 };
+use crate::ramfs::{ramfs_link, ramfs_unlink, RamFsInode};
 use crate::superblock::SuperBlock;
 use crate::{
     wwarn, DataOps, File, FileMode, FileOps, FileSystemAttr, FileSystemType, MountFlags, StrResult,
@@ -39,6 +39,8 @@ const fn root_fs_inode_ops() -> InodeOps {
     let mut ops = InodeOps::empty();
     ops.mkdir = rootfs_mkdir;
     ops.create = rootfs_create;
+    ops.link = rootfs_link;
+    ops.unlink = rootfs_unlink;
     ops
 }
 
@@ -126,4 +128,25 @@ fn rootfs_read_file(file: Arc<Mutex<File>>, buf: &mut [u8], offset: u64) -> StrR
 fn rootfs_write_file(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResult<usize> {
     wwarn!("rootfs_write_file");
     ramfs_write_file(ROOT_FS.clone(), file, buf, offset)
+}
+
+/// 创建硬链接
+fn rootfs_link(
+    old_dentry: Arc<Mutex<DirEntry>>,
+    dir: Arc<Mutex<Inode>>,
+    new_dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
+    wwarn!("rootfs_link");
+    let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
+    ramfs_link(ROOT_FS.clone(), old_dentry, dir, new_dentry)?;
+    wwarn!("rootfs_link end");
+    Ok(())
+}
+
+/// 删除硬链接
+fn rootfs_unlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
+    wwarn!("rootfs_unlink");
+    ramfs_unlink(ROOT_FS.clone(), dir, dentry)?;
+    wwarn!("rootfs_unlink end");
+    Ok(())
 }

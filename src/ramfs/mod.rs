@@ -23,7 +23,7 @@ pub struct RamFsInode {
     data: Vec<u8>,
     // 类型
     mode: InodeMode,
-    hard_link: u32,
+    hard_links: u32,
     // 读写权限
     attr: FileMode,
 }
@@ -35,7 +35,7 @@ impl RamFsInode {
             number,
             data: Vec::new(),
             mode,
-            hard_link: h_link,
+            hard_links: h_link,
             attr,
         }
     }
@@ -139,7 +139,7 @@ fn ramfs_create_root_inode(
     drop(inode_lk);
     // 插入根inode
     let mut ram_inode = RamFsInode::new(mode, FileMode::FMODE_WRITE, 0);
-    ram_inode.hard_link -= 1;
+    ram_inode.hard_links -= 1;
     fs.lock().insert(0, ram_inode);
     Ok(inode)
 }
@@ -178,7 +178,7 @@ fn ramfs_create_inode(
     let mut inode_lock = inode.lock();
     // 根据raminode 设置inode的属性
     inode_lock.number = ram_inode.number;
-    inode_lock.hard_links = ram_inode.hard_link;
+    inode_lock.hard_links = ram_inode.hard_links;
     inode_lock.mode = ram_inode.mode;
     inode_lock.inode_ops = match ram_inode.mode {
         InodeMode { .. } => inode_ops,
@@ -287,4 +287,53 @@ fn ramfs_write_file(
         );
     }
     Ok(buf.len())
+}
+
+fn ramfs_link(
+    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    old_dentry: Arc<Mutex<DirEntry>>,
+    dir: Arc<Mutex<Inode>>,
+    new_dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
+    wwarn!("ramfs_link");
+    let old_inode = old_dentry.lock().d_inode.clone();
+    let mut old_inode_lock = old_inode.lock();
+    old_inode_lock.hard_links += 1;
+    let inode_number = old_inode_lock.number;
+    let mut binding = fs.lock();
+    let ram_inode = binding.get_mut(&inode_number).unwrap();
+    ram_inode.hard_links += 1;
+
+    drop(old_inode_lock);
+    new_dentry.lock().d_inode = old_inode;
+    let mut dir_lock = dir.lock();
+    assert_eq!(dir_lock.mode, InodeMode::S_DIR);
+    // TODO dir目录下需要增加一个(磁盘)目录项
+    wwarn!("ramfs_link end");
+    Ok(())
+}
+
+fn ramfs_unlink(
+    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    dir: Arc<Mutex<Inode>>,
+    dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
+    wwarn!("ramfs_unlink");
+    let mut dir_lock = dir.lock();
+    assert_eq!(dir_lock.mode, InodeMode::S_DIR);
+    let name = dentry.lock().d_name.clone();
+    // TODO dir目录下需要删除一个(磁盘)目录项
+    let inode = dentry.lock().d_inode.clone();
+    let mut inode_lock = inode.lock();
+    inode_lock.hard_links -= 1;
+    if inode_lock.hard_links == 0 {
+        let number = inode_lock.number;
+        let mut binding = fs.lock();
+        let ram_inode = binding.get_mut(&number).unwrap();
+        ram_inode.hard_links -= 1;
+        assert_eq!(ram_inode.hard_links, 0);
+        binding.remove(&number);
+    }
+    wwarn!("ramfs_unlink end");
+    Ok(())
 }

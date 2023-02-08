@@ -2,6 +2,7 @@ use crate::dentrry::{
     __advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry, LookUpData,
     LookUpFlags, PathType,
 };
+use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeMode};
 use crate::{wwarn, StrResult, VfsMount};
 use alloc::sync::Arc;
@@ -9,7 +10,6 @@ use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use logger::{info, warn};
 use spin::Mutex;
-use crate::info::ProcessFs;
 
 pub struct File {
     pub f_dentry: Arc<Mutex<DirEntry>>,
@@ -181,16 +181,19 @@ pub fn vfs_read_file<T: ProcessFs>(
     res
 }
 
+/// write file
 pub fn vfs_write_file<T: ProcessFs>(
     file: Arc<Mutex<File>>,
     buf: &[u8],
     offset: u64,
 ) -> StrResult<usize> {
-    let write = file.lock().f_ops.write;
-    let mode = file.lock().f_mode;
+    let file_lock = file.lock();
+    let write = file_lock.f_ops.write;
+    let mode = file_lock.f_mode;
     if !mode.contains(FileMode::FMODE_WRITE) {
         return Err("file not open for writing");
     }
+    drop(file_lock);
     let res = write(file.clone(), buf, offset);
     res
 }
@@ -228,7 +231,6 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     // TODO dentry 插入全局链表
     Ok(())
 }
-
 
 pub fn generic_file_read(
     _file: Arc<Mutex<File>>,

@@ -1,4 +1,5 @@
 use crate::dentrry::{path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags};
+use crate::info::ProcessFs;
 use crate::inode::{InodeFlags, InodeMode};
 use crate::superblock::{lookup_filesystem, DataOps, SuperBlock};
 use crate::{wwarn, StrResult, GLOBAL_HASH_MOUNT};
@@ -10,7 +11,6 @@ use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use logger::{info, warn};
 use spin::Mutex;
-use crate::info::ProcessFs;
 
 bitflags! {
     pub struct MountFlags:u32{

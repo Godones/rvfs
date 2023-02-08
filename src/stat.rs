@@ -1,13 +1,14 @@
-use alloc::sync::Arc;
-use spin::Mutex;
-use crate::{LookUpFlags, path_walk, StrResult};
 use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeMode};
+use crate::{path_walk, LookUpFlags, StrResult};
+use alloc::sync::Arc;
+use spin::Mutex;
 
+#[derive(Debug)]
 pub struct FileAttribute {
     pub dev: u32,
     pub ino: u32,
-    pub i_mod:InodeMode,
+    pub i_mod: InodeMode,
     pub nlink: u32,
     pub uid: u32,
     pub gid: u32,
@@ -17,15 +18,14 @@ pub struct FileAttribute {
     pub blocks: usize,
 }
 
-
 /// 读取文件的状态信息
-pub fn vfs_stat<T:ProcessFs>(file_name:&str) ->StrResult<FileAttribute> {
+pub fn vfs_stat<T: ProcessFs>(file_name: &str) -> StrResult<FileAttribute> {
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let inode = lookup_data.dentry.lock().d_inode.clone();
     let get_attr = inode.lock().inode_ops.get_attr;
     let res = get_attr(lookup_data.dentry.clone());
-    if res.is_ok(){
-        return Ok(res.unwrap())
+    if res.is_ok() {
+        return Ok(res.unwrap());
     }
     let attr = generic_get_file_attribute(inode);
     Ok(attr)
@@ -33,13 +33,13 @@ pub fn vfs_stat<T:ProcessFs>(file_name:&str) ->StrResult<FileAttribute> {
 /// 读取文件的状态信息
 ///
 /// 在文件系统未实现此功能时默认调用
-fn generic_get_file_attribute(inode:Arc<Mutex<Inode>>)->FileAttribute{
+fn generic_get_file_attribute(inode: Arc<Mutex<Inode>>) -> FileAttribute {
     let sb_blk = inode.lock().super_blk.upgrade().unwrap();
     let sb_blk = sb_blk.lock();
     let inode = inode.lock();
-    let file_attr = FileAttribute{
+    let file_attr = FileAttribute {
         dev: sb_blk.dev_desc,
-        ino: inode.number ,
+        ino: inode.number,
         i_mod: inode.mode,
         nlink: inode.hard_links,
         uid: inode.uid,

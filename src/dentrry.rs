@@ -1,3 +1,4 @@
+use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeMode};
 use crate::{iinfo, wwarn, StrResult, VfsMount, GLOBAL_HASH_MOUNT};
 use alloc::string::{String, ToString};
@@ -8,7 +9,6 @@ use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use logger::{info, warn};
 use spin::Mutex;
-use crate::info::ProcessFs;
 
 bitflags! {
     pub struct DirFlags:u32{
@@ -74,7 +74,7 @@ impl DirEntry {
     pub fn insert_child(&mut self, child: Arc<Mutex<DirEntry>>) {
         self.children.push(child);
     }
-    pub fn remove_child(&mut self, child_name:&str) {
+    pub fn remove_child(&mut self, child_name: &str) {
         self.children.retain(|x| !x.lock().d_name.eq(child_name));
     }
 }
@@ -108,7 +108,6 @@ impl DirEntryOps {
 }
 
 pub struct DirContext {}
-
 
 bitflags! {
     pub struct LookUpFlags:u32{
@@ -274,7 +273,7 @@ fn __generic_load_dentry<T: ProcessFs>(
             }
         }
         // 在当前目录中搜索下一个分量。
-        info!("try find {} in current dir",component);
+        info!("try find {} in current dir", component);
         let (mut next_mnt, mut next_dentry) = find_file_indir(lookup_data, component)?;
         // TODO 向前推进到当前目录最后一个安装点
         // 查找得到的目录可能依次挂载了很多文件系统
@@ -501,7 +500,7 @@ pub fn advance_mount(
     let mut mount_count = next_dentry.lock().mount_count;
     let mut t_mnt = mnt.clone();
     let mut t_dentry = next_dentry.clone();
-    info!("dentry:{:#?}",t_dentry);
+    info!("dentry:{:#?}", t_dentry);
     while mount_count > 0 {
         // 挂载点的根目录的mount_count必须大于0
         let child_mnt = lookup_mount(t_mnt.clone(), t_dentry.clone());

@@ -1,10 +1,10 @@
 use crate::dentrry::DirEntry;
 use crate::inode::{Inode, InodeMode, InodeOps};
-use crate::ramfs::RamFsInode;
 use crate::ramfs::{
     ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk,
     ramfs_mkdir, ramfs_read_file, ramfs_simple_super_blk, ramfs_write_file,
 };
+use crate::ramfs::{ramfs_link, ramfs_unlink, RamFsInode};
 use crate::superblock::SuperBlock;
 use crate::{
     wwarn, DataOps, File, FileMode, FileOps, FileSystemAttr, FileSystemType, MountFlags, StrResult,
@@ -39,6 +39,8 @@ const fn root_fs_inode_ops() -> InodeOps {
     let mut ops = InodeOps::empty();
     ops.mkdir = tmpfs_mkdir;
     ops.create = tmpfs_create;
+    ops.link = tmpfs_link;
+    ops.unlink = tmpfs_unlink;
     ops
 }
 
@@ -126,4 +128,25 @@ fn tmpfs_read_file(file: Arc<Mutex<File>>, buf: &mut [u8], offset: u64) -> StrRe
 fn tmpfs_write_file(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResult<usize> {
     wwarn!("tmpfs_write_file");
     ramfs_write_file(TMP_FS.clone(), file, buf, offset)
+}
+
+/// 创建硬链接
+fn tmpfs_link(
+    old_dentry: Arc<Mutex<DirEntry>>,
+    dir: Arc<Mutex<Inode>>,
+    new_dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
+    wwarn!("tmpfs_link");
+    let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
+    ramfs_link(TMP_FS.clone(), old_dentry, dir, new_dentry)?;
+    wwarn!("tmpfs_link end");
+    Ok(())
+}
+
+/// 删除硬链接
+fn tmpfs_unlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
+    wwarn!("tmpfs_link");
+    ramfs_unlink(TMP_FS.clone(), dir, dentry)?;
+    wwarn!("tmpfs_link end");
+    Ok(())
 }
