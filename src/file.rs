@@ -47,7 +47,8 @@ impl File {
         mode: FileMode,
         f_ops: FileOps,
     ) -> File {
-        let file = File {
+        
+        File {
             f_dentry: dentry,
             f_mnt: mnt,
             f_ops,
@@ -56,8 +57,7 @@ impl File {
             f_pos: 0,
             f_uid: 0,
             f_gid: 0,
-        };
-        file
+        }
     }
 }
 
@@ -177,8 +177,8 @@ pub fn vfs_read_file<T: ProcessFs>(
         return Err("file not open for reading");
     }
     let read = file.lock().f_ops.read;
-    let res = read(file.clone(), buf, offset);
-    res
+    
+    read(file.clone(), buf, offset)
 }
 
 /// write file
@@ -194,8 +194,8 @@ pub fn vfs_write_file<T: ProcessFs>(
         return Err("file not open for writing");
     }
     drop(file_lock);
-    let res = write(file.clone(), buf, offset);
-    res
+    
+    write(file.clone(), buf, offset)
 }
 
 pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
@@ -227,7 +227,7 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     target_dentry.lock().d_name = last;
     // 设置父子关系
     target_dentry.lock().parent = Arc::downgrade(&dentry);
-    dentry.lock().insert_child(target_dentry.clone());
+    dentry.lock().insert_child(target_dentry);
     // TODO dentry 插入全局链表
     Ok(())
 }
@@ -266,7 +266,7 @@ fn construct_file(
     let inode = dentry.lock().d_inode.clone();
     let f_ops = inode.lock().file_ops.clone();
     let open = f_ops.open;
-    let file = File::new(dentry.clone(), lookup_data.mnt.clone(), flags, mode, f_ops);
+    let file = File::new(dentry, lookup_data.mnt.clone(), flags, mode, f_ops);
     let file = Arc::new(Mutex::new(file));
     // TODO impl open in inodeops
     let res = open(file.clone());
@@ -280,16 +280,16 @@ fn construct_file(
     Ok(file)
 }
 
-impl Into<LookUpFlags> for FileFlags {
-    fn into(self) -> LookUpFlags {
+impl From<FileFlags> for LookUpFlags {
+    fn from(val: FileFlags) -> Self {
         let mut flags = LookUpFlags::READ_LINK;
-        if self.contains(FileFlags::O_DIRECTORY) {
+        if val.contains(FileFlags::O_DIRECTORY) {
             flags |= LookUpFlags::DIRECTORY;
         }
-        if self.contains(FileFlags::O_NOFOLLOW) {
+        if val.contains(FileFlags::O_NOFOLLOW) {
             flags -= LookUpFlags::READ_LINK;
         }
-        if self.contains(FileFlags::O_EXCL | FileFlags::O_CREAT) {
+        if val.contains(FileFlags::O_EXCL | FileFlags::O_CREAT) {
             flags -= LookUpFlags::READ_LINK;
         }
         flags

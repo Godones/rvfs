@@ -1,9 +1,6 @@
 use crate::dentrry::DirEntry;
 use crate::inode::{Inode, InodeMode, InodeOps};
-use crate::ramfs::{
-    ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk,
-    ramfs_mkdir, ramfs_read_file, ramfs_simple_super_blk, ramfs_write_file,
-};
+use crate::ramfs::{ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk, ramfs_mkdir, ramfs_read_file, ramfs_simple_super_blk, ramfs_symlink, ramfs_write_file};
 use crate::ramfs::{ramfs_link, ramfs_unlink, RamFsInode};
 use crate::superblock::SuperBlock;
 use crate::{
@@ -25,14 +22,14 @@ lazy_static! {
 }
 
 pub const fn tmp_fs_type() -> FileSystemType {
-    let fs_type = FileSystemType {
+    
+    FileSystemType {
         name: "tmpfs",
         fs_flags: FileSystemAttr::empty(),
         super_blk_s: Vec::new(),
         get_super_blk: tmpfs_get_super_blk,
         kill_super_blk: ramfs_kill_super_blk,
-    };
-    fs_type
+    }
 }
 
 const fn root_fs_inode_ops() -> InodeOps {
@@ -41,6 +38,7 @@ const fn root_fs_inode_ops() -> InodeOps {
     ops.create = tmpfs_create;
     ops.link = tmpfs_link;
     ops.unlink = tmpfs_unlink;
+    ops.symlink =tmpfs_symlink;
     ops
 }
 
@@ -148,5 +146,23 @@ fn tmpfs_unlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResu
     wwarn!("tmpfs_link");
     ramfs_unlink(TMP_FS.clone(), dir, dentry)?;
     wwarn!("tmpfs_link end");
+    Ok(())
+}
+
+/// create a symbolic link
+fn tmpfs_symlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str) -> StrResult<()>{
+    wwarn!("tmpfs_symlink");
+    let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
+    ramfs_symlink(
+        TMP_FS.clone(),
+        FileMode::FMODE_READ,
+        number,
+        dir,
+        dentry,
+        target,
+        InodeOps::empty(),
+        FileOps::empty(),
+    )?;
+    wwarn!("tmpfs_symlink end");
     Ok(())
 }

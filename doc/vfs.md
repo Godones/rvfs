@@ -9,7 +9,7 @@
 
 
 
-
+[mfs.rs](..%2Fexamples%2Fmfs.rs)
 
 
 ## 参考资料
@@ -17,3 +17,7 @@
 [Linux 虚拟文件系统 - beihai blog (wingsxdu.com)](https://wingsxdu.com/posts/linux/vfs/)
 
 [ramfs、tmpfs、rootfs、ramdisk介绍 - 瘋耔 - 博客园 (cnblogs.com)](https://www.cnblogs.com/qiynet/p/15118550.html)
+
+[linux系统调用之sys_unlink（基于linux0.11） - 腾讯云开发者社区-腾讯云 (tencent.com)](https://cloud.tencent.com/developer/article/1425086)
+
+[Linux内核2.4.18创建硬链接的系统调用sys_link - 嵌入式Linux中文站 (embeddedlinux.org.cn)](http://www.embeddedlinux.org.cn/emb-linux/system-development/201708/11-7108.html)

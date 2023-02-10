@@ -4,7 +4,7 @@ use crate::{path_walk, LookUpFlags, StrResult};
 use alloc::sync::Arc;
 use spin::Mutex;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileAttribute {
     pub dev: u32,
     pub ino: u32,
@@ -23,7 +23,7 @@ pub fn vfs_stat<T: ProcessFs>(file_name: &str) -> StrResult<FileAttribute> {
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let inode = lookup_data.dentry.lock().d_inode.clone();
     let get_attr = inode.lock().inode_ops.get_attr;
-    let res = get_attr(lookup_data.dentry.clone());
+    let res = get_attr(lookup_data.dentry);
     if res.is_ok() {
         return Ok(res.unwrap());
     }
@@ -37,7 +37,8 @@ fn generic_get_file_attribute(inode: Arc<Mutex<Inode>>) -> FileAttribute {
     let sb_blk = inode.lock().super_blk.upgrade().unwrap();
     let sb_blk = sb_blk.lock();
     let inode = inode.lock();
-    let file_attr = FileAttribute {
+    
+    FileAttribute {
         dev: sb_blk.dev_desc,
         ino: inode.number,
         i_mod: inode.mode,
@@ -47,6 +48,5 @@ fn generic_get_file_attribute(inode: Arc<Mutex<Inode>>) -> FileAttribute {
         size: inode.file_size,
         blksize: inode.blk_size,
         blocks: inode.blk_count,
-    };
-    file_attr
+    }
 }
