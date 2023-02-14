@@ -3,7 +3,7 @@ use crate::info::ProcessFs;
 use crate::inode::InodeMode;
 use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult};
 use alloc::sync::Arc;
-use logger::{info, warn};
+use log::{info, warn};
 use spin::Mutex;
 /// 删除文件
 pub fn vfs_unlink<T: ProcessFs>(name: &str) -> StrResult<()> {

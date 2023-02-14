@@ -13,20 +13,21 @@ pub mod ramfs;
 mod stat;
 mod superblock;
 
+#[macro_use]
+extern crate log;
 extern crate alloc;
 use crate::dentrry::DirEntry;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use lazy_static::lazy_static;
-use logger::info;
-use logger::warn;
 pub use mount::*;
 use spin::{Mutex, RwLock};
 use superblock::SuperBlock;
 
 use crate::info::{ProcessFs, ProcessFsInfo};
 use crate::ramfs::rootfs::root_fs_type;
+pub use log::{info,warn,error};
 pub use dentrry::*;
 pub use file::*;
 pub use superblock::*;

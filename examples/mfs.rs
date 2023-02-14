@@ -1,4 +1,3 @@
-use logger::init_logger;
 use rvfs::ramfs::tmpfs::tmp_fs_type;
 use rvfs::{
     do_mount, init_vfs, path_walk, register_filesystem, vfs_link, vfs_mkdir, vfs_open_file,
