@@ -23,8 +23,6 @@ use logger::info;
 use logger::warn;
 pub use mount::*;
 use spin::{Mutex, RwLock};
-use superblock::SuperBlock;
-
 use crate::info::{ProcessFs, ProcessFsInfo};
 use crate::ramfs::rootfs::root_fs_type;
 pub use dentrry::*;
