@@ -1,9 +1,6 @@
 use crate::dentrry::DirEntry;
 use crate::inode::{Inode, InodeMode, InodeOps};
-use crate::ramfs::{
-    ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk,
-    ramfs_mkdir, ramfs_read_file, ramfs_simple_super_blk, ramfs_write_file,
-};
+use crate::ramfs::{ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk, ramfs_mkdir, ramfs_read_file, ramfs_simple_super_blk, ramfs_symlink, ramfs_write_file};
 use crate::ramfs::{ramfs_link, ramfs_unlink, RamFsInode};
 use crate::superblock::SuperBlock;
 use crate::{
@@ -25,14 +22,14 @@ lazy_static! {
 }
 
 pub const fn root_fs_type() -> FileSystemType {
-    let fs_type = FileSystemType {
+    
+    FileSystemType {
         name: "rootfs",
         fs_flags: FileSystemAttr::empty(),
         super_blk_s: Vec::new(),
         get_super_blk: rootfs_get_super_blk,
         kill_super_blk: ramfs_kill_super_blk,
-    };
-    fs_type
+    }
 }
 
 const fn root_fs_inode_ops() -> InodeOps {
@@ -41,6 +38,7 @@ const fn root_fs_inode_ops() -> InodeOps {
     ops.create = rootfs_create;
     ops.link = rootfs_link;
     ops.unlink = rootfs_unlink;
+    ops.symlink = rootfs_symlink;
     ops
 }
 
@@ -130,7 +128,7 @@ fn rootfs_write_file(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResu
     ramfs_write_file(ROOT_FS.clone(), file, buf, offset)
 }
 
-/// 创建硬链接
+/// create a hard link to the inode
 fn rootfs_link(
     old_dentry: Arc<Mutex<DirEntry>>,
     dir: Arc<Mutex<Inode>>,
@@ -143,10 +141,28 @@ fn rootfs_link(
     Ok(())
 }
 
-/// 删除硬链接
+/// decrease the hard link count of the inode
 fn rootfs_unlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
     wwarn!("rootfs_unlink");
     ramfs_unlink(ROOT_FS.clone(), dir, dentry)?;
     wwarn!("rootfs_unlink end");
+    Ok(())
+}
+
+/// create a symbolic link
+fn rootfs_symlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str) -> StrResult<()>{
+    wwarn!("rootfs_symlink");
+    let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
+    ramfs_symlink(
+        ROOT_FS.clone(),
+        FileMode::FMODE_READ,
+        number,
+        dir,
+        dentry,
+        target,
+        InodeOps::empty(),
+        FileOps::empty(),
+    )?;
+    wwarn!("rootfs_symlink end");
     Ok(())
 }

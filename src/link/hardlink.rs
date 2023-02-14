@@ -5,7 +5,8 @@ use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult}
 use alloc::sync::Arc;
 use log::{info, warn};
 use spin::Mutex;
-/// 删除文件
+/// decrease the hard link count of a file
+/// * name: the path of the file
 pub fn vfs_unlink<T: ProcessFs>(name: &str) -> StrResult<()> {
     // 查找文件
     let mut lookup_data = path_walk::<T>(name, LookUpFlags::NOLAST)?;
@@ -33,15 +34,15 @@ pub fn vfs_unlink<T: ProcessFs>(name: &str) -> StrResult<()> {
     }
     // 调用函数删除文件
     let unlink = inode.lock().inode_ops.unlink;
-    unlink(inode.clone(), sub_dentry.clone())?;
+    unlink(inode.clone(), sub_dentry)?;
     dentry.lock().remove_child(&last);
 
     Ok(())
 }
 
-/// 创建硬链接链接
-///
-/// 将系统调用功能下放至vfs层，由vfs层实现大部分逻辑
+/// create a hard link
+/// * old: the path of the old file
+/// * new: the path of the new file
 pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
     wwarn!("vfs_link");
     // 查找old的inode
@@ -80,20 +81,18 @@ pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
     if sub_dentry.is_ok() {
         return Err("The file already exists");
     }
-    // 调用函数创建一个链接文件
-    let target_dentry = Arc::new(Mutex::new(DirEntry::empty()));
-    // 设置目录名
-    target_dentry.lock().d_name = last;
-    // 设置父子关系
-    target_dentry.lock().parent = Arc::downgrade(&dentry);
-    dentry.lock().insert_child(target_dentry.clone());
 
+    let target_dentry = Arc::new(Mutex::new(DirEntry::from_lookup_data(&new_lookup_data)));
+
+    // 调用函数创建一个链接文件
     let do_link = inode.lock().inode_ops.link;
     do_link(
         old_lookup_data.dentry.clone(),
         inode.clone(),
         target_dentry.clone(),
     )?;
+    // 确保文件系统完成功能再加入到缓存中
+    dentry.lock().insert_child(target_dentry);
     wwarn!("vfs_link: ok");
     Ok(())
 }

@@ -197,21 +197,20 @@ pub fn unregister_filesystem(fs_type: FileSystemType) -> Result<(), &'static str
         .iter()
         .enumerate()
         .find(|(_, t)| fs_type.name == t.lock().name);
-    return match f {
+    match f {
         None => Err("NoFsType"),
         Some((index, _)) => {
             lock.remove(index);
             Ok(())
         }
-    };
+    }
 }
 
 pub fn lookup_filesystem(name: &str) -> Option<Arc<Mutex<FileSystemType>>> {
     let lock = ALL_FS.read();
     let fs_type = lock
         .iter()
-        .find(|fs_type| fs_type.lock().name == name)
-        .map(|fs_type| fs_type.clone());
+        .find(|fs_type| fs_type.lock().name == name).cloned();
     fs_type
 }
 

@@ -101,8 +101,8 @@ fn ramfs_simple_super_blk(
         Err(_) => {
             // 没有找到旧超级快需要重新分配
             info!("create new super block for ramfs");
-            let sb_blk = create_simple_ram_super_blk(fs_type.clone(), flags, dev_name, data)?;
-            sb_blk
+            
+            create_simple_ram_super_blk(fs_type, flags, dev_name, data)?
         }
     };
     wwarn!("ramfs_simple_super_blk end");
@@ -172,7 +172,7 @@ fn ramfs_create_inode(
     fs.lock().insert(number, ram_inode.clone());
 
     // 根据ramfs的inode创建inode
-    let sb_blk = dir.lock().super_blk.upgrade().unwrap().clone();
+    let sb_blk = dir.lock().super_blk.upgrade().unwrap();
     // 创建inode
     let inode = create_tmp_inode_from_sb_blk(sb_blk)?;
     let mut inode_lock = inode.lock();
@@ -335,5 +335,34 @@ fn ramfs_unlink(
         binding.remove(&number);
     }
     wwarn!("ramfs_unlink end");
+    Ok(())
+}
+
+fn ramfs_symlink(
+    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    mode: FileMode,
+    number: u32,
+    dir: Arc<Mutex<Inode>>,
+    dentry: Arc<Mutex<DirEntry>>,
+    target: &str,
+    inode_ops: InodeOps,
+    file_ops: FileOps,
+) -> StrResult<()> {
+    wwarn!("ramfs_symlink");
+    let inode = ramfs_create_inode(
+        fs.clone(),
+        dir,
+        InodeMode::S_IFLNK,
+        mode,
+        number,
+        inode_ops,
+        file_ops
+    )?;
+    let mut fs_lk = fs.lock();
+    let ram_inode= fs_lk.get_mut(&number).unwrap();
+    ram_inode.data.extend_from_slice(target.as_bytes());
+    inode.lock().file_size = target.len();
+    dentry.lock().d_inode = inode;
+    wwarn!("ramfs_symlink end");
     Ok(())
 }

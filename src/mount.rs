@@ -71,16 +71,16 @@ impl VfsMount {
     ) -> VfsMount {
         // 设置挂载点所在目录与挂载的文件系统根目录相同
         let dir = super_block.lock().root.clone();
-        let mount = VfsMount {
+        
+        VfsMount {
             flag: MountFlags::empty(),
             dev_name: dev_name.to_string(),
             parent,
             mount_point: dir.clone(),
-            root: dir.clone(),
+            root: dir,
             super_block,
             child: Vec::new(),
-        };
-        mount
+        }
     }
     /// 插入子挂载点
     pub fn inert_child(&mut self, child: Arc<Mutex<VfsMount>>) {
@@ -148,7 +148,7 @@ fn do_add_mount(
     data: Option<Box<dyn DataOps>>,
 ) -> StrResult<Arc<Mutex<VfsMount>>> {
     wwarn!("do_add_mount");
-    if fs_type.len() == 0 {
+    if fs_type.is_empty() {
         return Err("fs_type is empty");
     }
     // 加载文件系统超级块
@@ -287,7 +287,7 @@ fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<(
     new_mount.lock().parent = Arc::downgrade(&look.mnt);
     new_mount.lock().mount_point = look.dentry.clone();
     // 加入上级对象的子对象链表中
-    look.mnt.lock().inert_child(new_mount.clone());
+    look.mnt.lock().inert_child(new_mount);
     look.dentry.lock().mount_count += 1;
 
     // info!("parent: {:#?}", look.mnt);

@@ -65,19 +65,28 @@ impl DirEntry {
             mount_count: 0,
         }
     }
-}
-
-unsafe impl Send for DirEntry {}
-unsafe impl Sync for DirEntry {}
-
-impl DirEntry {
     pub fn insert_child(&mut self, child: Arc<Mutex<DirEntry>>) {
         self.children.push(child);
     }
     pub fn remove_child(&mut self, child_name: &str) {
         self.children.retain(|x| !x.lock().d_name.eq(child_name));
     }
+    pub fn from_lookup_data(data: &LookUpData) -> Self {
+        let parent = data.dentry.clone();
+        DirEntry {
+            d_flags: DirFlags::empty(),
+            d_inode: Arc::new(Mutex::new(Inode::empty())),
+            parent: Arc::downgrade(&parent),
+            d_ops: DirEntryOps::empty(),
+            d_name: data.last.clone(),
+            children: Vec::new(),
+            mount_count: 0,
+        }
+    }
 }
+
+unsafe impl Send for DirEntry {}
+unsafe impl Sync for DirEntry {}
 
 pub struct DirEntryOps {
     pub d_hash: fn(dentry: Arc<Mutex<DirEntry>>, name: &str) -> usize,
@@ -197,15 +206,15 @@ pub fn path_walk<T: ProcessFs>(dir_name: &str, flags: LookUpFlags) -> StrResult<
     wwarn!("path_walk");
     let fs_info = T::get_fs_info();
     // 如果是绝对路径，则从根目录开始查找
-    let (mnt, dentry) = if dir_name.starts_with("/") {
-        (fs_info.root_mount.clone(), fs_info.root_dir.clone())
+    let (mnt, dentry) = if dir_name.starts_with('/') {
+        (fs_info.root_mount.clone(), fs_info.root_dir)
     } else {
         // 否则从当前目录开始查找
-        (fs_info.current_mount.clone(), fs_info.current_dir.clone())
+        (fs_info.current_mount.clone(), fs_info.current_dir)
     };
     // 初始化查找数据
     let mut lookup_data = LookUpData::new(flags, dentry, mnt);
-    let _x = __generic_load_dentry::<T>(dir_name, &mut lookup_data)?;
+    __generic_load_dentry::<T>(dir_name, &mut lookup_data)?;
     wwarn!("path_walk end");
     Ok(lookup_data)
 }
@@ -223,7 +232,7 @@ fn __generic_load_dentry<T: ProcessFs>(
     }
     // resolve consecutive slashes
     let mut dir_name = dir_name;
-    while dir_name.starts_with("/") {
+    while dir_name.starts_with('/') {
         dir_name = &dir_name[1..];
     }
     // 如果是空字符串/根目录，直接返回
@@ -252,7 +261,7 @@ fn __generic_load_dentry<T: ProcessFs>(
         }
 
         // 如果分量以"/"结束,说明也是路径的最后一个分量，但是此分量代表目录。
-        while dir_name.starts_with("/") {
+        while dir_name.starts_with('/') {
             dir_name = &dir_name[1..];
         }
         if dir_name.is_empty() {
@@ -261,7 +270,7 @@ fn __generic_load_dentry<T: ProcessFs>(
         }
 
         // 当前路径以"."开头
-        if component.starts_with(".") && component.len() <= 2 {
+        if component.starts_with('.') && component.len() <= 2 {
             if component == "." {
                 continue;
             } else if component == ".." {
@@ -319,7 +328,7 @@ fn __normal_load_dentry<T: ProcessFs>(
         lookup_data.path_type = PathType::PATH_NORMAL;
         lookup_data.last = dir.to_string();
         //TODO 保存最后一个分量
-        if !dir.starts_with(".") {
+        if !dir.starts_with('.') {
             // 如果最后一个分量不是"."或者".."，那么最后一个分量默认就是LAST_NORM
             // 可以直接返回成功
             return Ok(());
@@ -530,14 +539,8 @@ fn lookup_mount(
             let x = x.lock();
             let parent = x.parent.upgrade();
             //  此挂载点的父挂载点是当前挂载点并且挂载点的根目录是参数指定
-            if parent.is_some()
-                && Arc::ptr_eq(&parent.unwrap(), &mnt)
-                && Arc::ptr_eq(&x.mount_point, &next_dentry)
-            {
-                true
-            } else {
-                false
-            }
+            parent.is_some()
+                && Arc::ptr_eq(&parent.unwrap(), &mnt) && Arc::ptr_eq(&x.mount_point, &next_dentry)
         })
         .ok_or("mount not found")
         .map(|x| x.clone())
@@ -567,12 +570,12 @@ pub fn __advance_link<T: ProcessFs>(
     follow_link(dentry, lookup_data)?;
     let target_name = lookup_data.symlink_names.last().unwrap().clone();
     // 检查符号链接是否以'/'开头
-    if target_name.starts_with("/") {
+    if target_name.starts_with('/') {
         // 是以'/'开头，已经找到一个绝对路径了
         // 因此没有必要保留前一个路径的任何信息,一切从头开始。
         let process_info = T::get_fs_info();
         lookup_data.dentry = process_info.current_dir.clone();
-        lookup_data.mnt = process_info.current_mount.clone();
+        lookup_data.mnt = process_info.current_mount;
     }
     __generic_load_dentry::<T>(&target_name, lookup_data)
 }
@@ -581,7 +584,7 @@ pub fn __advance_link<T: ProcessFs>(
 fn get_next_path_component(dir_name: &str) -> (&str, &str) {
     let mut next_path = "";
     let component;
-    if let Some(index) = dir_name.find("/") {
+    if let Some(index) = dir_name.find('/') {
         next_path = &dir_name[index..];
         component = &dir_name[..index];
     } else {

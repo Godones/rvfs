@@ -23,8 +23,6 @@ use alloc::vec::Vec;
 use lazy_static::lazy_static;
 pub use mount::*;
 use spin::{Mutex, RwLock};
-use superblock::SuperBlock;
-
 use crate::info::{ProcessFs, ProcessFsInfo};
 use crate::ramfs::rootfs::root_fs_type;
 pub use log::{info,warn,error};

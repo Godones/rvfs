@@ -88,6 +88,8 @@ pub struct InodeOps {
     pub unlink: fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()>,
 
     pub get_attr: fn(dentry: Arc<Mutex<DirEntry>>) -> StrResult<FileAttribute>,
+
+    pub symlink: fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str) -> StrResult<()>,
 }
 impl Debug for InodeOps {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
@@ -98,27 +100,23 @@ impl Debug for InodeOps {
 impl InodeOps {
     pub const fn empty() -> Self {
         Self {
-            follow_link: |_, _| Err("NOT SUPPORT"),
-            lookup: |_, _| Err("NOT SUPPORT"),
-            create: |_, _, _| Err("NOT SUPPORT"),
-            mkdir: |_, _, _| Err("NOT SUPPORT"),
-            link: |_, _, _| Err("NOT SUPPORT"),
-            unlink: |_, _| Err("NOT SUPPORT"),
-            get_attr: |_| Err("NOT SUPPORT"),
+            follow_link: |_, _| Err("Not support"),
+            lookup: |_, _| Err("Not support"),
+            create: |_, _, _| Err("Not support"),
+            mkdir: |_, _, _| Err("Not support"),
+            link: |_, _, _| Err("Not support"),
+            unlink: |_, _| Err("Not support"),
+            get_attr: |_| Err("Not support"),
+            symlink: |_,_,_|Err("Not support"),
         }
     }
 }
 
-pub fn generic_delete_inode(inode: Arc<Mutex<Inode>>) {
-    let sb_blk = inode.lock().super_blk.upgrade().unwrap();
-    // 从超级快中删除inode
-    sb_blk.lock().remove_inode(inode);
-}
 
 pub fn simple_statfs(sb_blk: Arc<Mutex<SuperBlock>>) -> StrResult<StatFs> {
     let stat = StatFs {
         fs_type: sb_blk.lock().magic,
-        block_size: sb_blk.lock().block_size as u32,
+        block_size: sb_blk.lock().block_size,
         name: sb_blk.lock().blk_dev_name.to_string(),
     };
     Ok(stat)
