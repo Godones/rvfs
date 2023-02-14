@@ -1,6 +1,9 @@
 use crate::dentrry::DirEntry;
 use crate::inode::{Inode, InodeMode, InodeOps};
-use crate::ramfs::{ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk, ramfs_mkdir, ramfs_read_file, ramfs_simple_super_blk, ramfs_symlink, ramfs_write_file};
+use crate::ramfs::{
+    ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk,
+    ramfs_mkdir, ramfs_read_file, ramfs_simple_super_blk, ramfs_symlink, ramfs_write_file,
+};
 use crate::ramfs::{ramfs_link, ramfs_unlink, RamFsInode};
 use crate::superblock::SuperBlock;
 use crate::{
@@ -12,7 +15,7 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
-use logger::warn;
+
 use spin::Mutex;
 
 static INODE_COUNT: AtomicU32 = AtomicU32::new(0);
@@ -22,7 +25,6 @@ lazy_static! {
 }
 
 pub const fn root_fs_type() -> FileSystemType {
-    
     FileSystemType {
         name: "rootfs",
         fs_flags: FileSystemAttr::empty(),
@@ -150,7 +152,11 @@ fn rootfs_unlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrRes
 }
 
 /// create a symbolic link
-fn rootfs_symlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str) -> StrResult<()>{
+fn rootfs_symlink(
+    dir: Arc<Mutex<Inode>>,
+    dentry: Arc<Mutex<DirEntry>>,
+    target: &str,
+) -> StrResult<()> {
     wwarn!("rootfs_symlink");
     let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_symlink(

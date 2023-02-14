@@ -8,7 +8,7 @@ use crate::{wwarn, StrResult, VfsMount};
 use alloc::sync::Arc;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use logger::{info, warn};
+use log::info;
 use spin::Mutex;
 
 pub struct File {
@@ -47,7 +47,6 @@ impl File {
         mode: FileMode,
         f_ops: FileOps,
     ) -> File {
-        
         File {
             f_dentry: dentry,
             f_mnt: mnt,
@@ -177,7 +176,7 @@ pub fn vfs_read_file<T: ProcessFs>(
         return Err("file not open for reading");
     }
     let read = file.lock().f_ops.read;
-    
+
     read(file.clone(), buf, offset)
 }
 
@@ -194,7 +193,7 @@ pub fn vfs_write_file<T: ProcessFs>(
         return Err("file not open for writing");
     }
     drop(file_lock);
-    
+
     write(file.clone(), buf, offset)
 }
 

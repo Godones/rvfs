@@ -7,7 +7,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use logger::{info, warn};
+use log::info;
 use spin::Mutex;
 
 bitflags! {
@@ -540,7 +540,8 @@ fn lookup_mount(
             let parent = x.parent.upgrade();
             //  此挂载点的父挂载点是当前挂载点并且挂载点的根目录是参数指定
             parent.is_some()
-                && Arc::ptr_eq(&parent.unwrap(), &mnt) && Arc::ptr_eq(&x.mount_point, &next_dentry)
+                && Arc::ptr_eq(&parent.unwrap(), &mnt)
+                && Arc::ptr_eq(&x.mount_point, &next_dentry)
         })
         .ok_or("mount not found")
         .map(|x| x.clone())

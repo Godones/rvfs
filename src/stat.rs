@@ -37,7 +37,7 @@ fn generic_get_file_attribute(inode: Arc<Mutex<Inode>>) -> FileAttribute {
     let sb_blk = inode.lock().super_blk.upgrade().unwrap();
     let sb_blk = sb_blk.lock();
     let inode = inode.lock();
-    
+
     FileAttribute {
         dev: sb_blk.dev_desc,
         ino: inode.number,

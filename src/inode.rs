@@ -89,7 +89,8 @@ pub struct InodeOps {
 
     pub get_attr: fn(dentry: Arc<Mutex<DirEntry>>) -> StrResult<FileAttribute>,
 
-    pub symlink: fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str) -> StrResult<()>,
+    pub symlink:
+        fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str) -> StrResult<()>,
 }
 impl Debug for InodeOps {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
@@ -107,11 +108,10 @@ impl InodeOps {
             link: |_, _, _| Err("Not support"),
             unlink: |_, _| Err("Not support"),
             get_attr: |_| Err("Not support"),
-            symlink: |_,_,_|Err("Not support"),
+            symlink: |_, _, _| Err("Not support"),
         }
     }
 }
-
 
 pub fn simple_statfs(sb_blk: Arc<Mutex<SuperBlock>>) -> StrResult<StatFs> {
     let stat = StatFs {
@@ -126,7 +126,6 @@ pub fn simple_statfs(sb_blk: Arc<Mutex<SuperBlock>>) -> StrResult<StatFs> {
 pub fn create_tmp_inode_from_sb_blk(
     sb_blk: Arc<Mutex<SuperBlock>>,
 ) -> StrResult<Arc<Mutex<Inode>>> {
-    use crate::warn;
     wwarn!("create_tmp_inode_from_sb_blk");
     let create_func = sb_blk.lock().super_block_ops.alloc_inode;
     let res = create_func(sb_blk.clone());

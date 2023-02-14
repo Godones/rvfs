@@ -13,7 +13,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use hashbrown::HashMap;
 
-use logger::{info, warn};
+use log::info;
 use spin::Mutex;
 
 #[derive(Clone)]
@@ -101,7 +101,7 @@ fn ramfs_simple_super_blk(
         Err(_) => {
             // 没有找到旧超级快需要重新分配
             info!("create new super block for ramfs");
-            
+
             create_simple_ram_super_blk(fs_type, flags, dev_name, data)?
         }
     };
@@ -356,10 +356,10 @@ fn ramfs_symlink(
         mode,
         number,
         inode_ops,
-        file_ops
+        file_ops,
     )?;
     let mut fs_lk = fs.lock();
-    let ram_inode= fs_lk.get_mut(&number).unwrap();
+    let ram_inode = fs_lk.get_mut(&number).unwrap();
     ram_inode.data.extend_from_slice(target.as_bytes());
     inode.lock().file_size = target.len();
     dentry.lock().d_inode = inode;

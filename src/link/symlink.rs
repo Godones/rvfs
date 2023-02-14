@@ -1,10 +1,10 @@
-use alloc::borrow::ToOwned;
 use crate::dentrry::DirEntry;
 use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeMode};
-use crate::{path_walk, LookUpFlags, PathType, StrResult, find_file_indir, wwarn};
+use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult};
+use alloc::borrow::ToOwned;
 use alloc::sync::Arc;
-use logger::{info,warn};
+use log::info;
 use spin::Mutex;
 
 /// create a symlink
@@ -45,7 +45,7 @@ fn do_symlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str
     wwarn!("do_symlink");
     may_create(dir.clone(), dentry.clone())?;
     let fs_symlink = dir.lock().inode_ops.symlink;
-    fs_symlink(dir,dentry,target)?;
+    fs_symlink(dir, dentry, target)?;
     wwarn!("do_symlink: end");
     Ok(())
 }

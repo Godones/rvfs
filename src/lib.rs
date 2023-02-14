@@ -13,21 +13,21 @@ pub mod ramfs;
 mod stat;
 mod superblock;
 
-#[macro_use]
-extern crate log;
 extern crate alloc;
+extern crate log;
+
 use crate::dentrry::DirEntry;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+pub use log::{info, warn};
 
+use crate::info::{ProcessFs, ProcessFsInfo};
+use crate::ramfs::rootfs::root_fs_type;
+pub use dentrry::*;
+pub use file::*;
 use lazy_static::lazy_static;
 pub use mount::*;
 use spin::{Mutex, RwLock};
-use crate::info::{ProcessFs, ProcessFsInfo};
-use crate::ramfs::rootfs::root_fs_type;
-pub use log::{info,warn,error};
-pub use dentrry::*;
-pub use file::*;
 pub use superblock::*;
 
 pub use link::*;
@@ -110,13 +110,13 @@ impl ProcessFs for FakeFSC {
 #[macro_export]
 macro_rules! iinfo {
     ($t:expr) => {
-        info!("[{}] [{}] :{}", file!(), $t, line!());
+        crate::info!("[{}] [{}] :{}", file!(), $t, line!());
     };
 }
 
 #[macro_export]
 macro_rules! wwarn {
     ($t:expr) => {
-        warn!("[{}] [{}] :{}", file!(), $t, line!());
+        crate::warn!("[{}] [{}] :{}", file!(), $t, line!());
     };
 }

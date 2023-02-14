@@ -1,9 +1,12 @@
 use rvfs::ramfs::tmpfs::tmp_fs_type;
-use rvfs::{do_mount, init_vfs, path_walk, register_filesystem, vfs_link, vfs_mkdir, vfs_open_file, vfs_read_file, vfs_stat, vfs_unlink, vfs_write_file, FakeFSC, FileFlags, FileMode, LookUpFlags, MountFlags, vfs_symlink};
+use rvfs::{
+    do_mount, init_vfs, path_walk, register_filesystem, vfs_link, vfs_mkdir, vfs_open_file,
+    vfs_read_file, vfs_stat, vfs_symlink, vfs_unlink, vfs_write_file, FakeFSC, FileFlags, FileMode,
+    LookUpFlags, MountFlags,
+};
 
 fn main() {
-    init_logger();
-
+    env_logger::init();
     println!("init vfs");
     init_vfs();
     println!("init vfs ok ......");
@@ -89,15 +92,14 @@ fn main() {
     println!("dir_attr: {:#?}", dir_attr);
 
     println!("-----------------------------------------");
-    vfs_symlink::<FakeFSC>("/","/s1").unwrap();
+    vfs_symlink::<FakeFSC>("/", "/s1").unwrap();
     println!("vfs_symlink ok ......");
 
     let file_attr = vfs_stat::<FakeFSC>("/s1").unwrap();
     println!("file_attr: {:#?}", file_attr);
 
-    vfs_symlink::<FakeFSC>("/tmp/tt1","/s2").unwrap();
+    vfs_symlink::<FakeFSC>("/tmp/tt1", "/s2").unwrap();
     println!("vfs_symlink ok ......");
     let file_attr = vfs_stat::<FakeFSC>("/s2").unwrap();
     println!("file_attr: {:#?}", file_attr);
-
 }

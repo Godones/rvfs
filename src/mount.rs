@@ -9,7 +9,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use logger::{info, warn};
+use log::info;
 use spin::Mutex;
 
 bitflags! {
@@ -71,7 +71,7 @@ impl VfsMount {
     ) -> VfsMount {
         // 设置挂载点所在目录与挂载的文件系统根目录相同
         let dir = super_block.lock().root.clone();
-        
+
         VfsMount {
             flag: MountFlags::empty(),
             dev_name: dev_name.to_string(),

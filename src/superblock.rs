@@ -210,7 +210,8 @@ pub fn lookup_filesystem(name: &str) -> Option<Arc<Mutex<FileSystemType>>> {
     let lock = ALL_FS.read();
     let fs_type = lock
         .iter()
-        .find(|fs_type| fs_type.lock().name == name).cloned();
+        .find(|fs_type| fs_type.lock().name == name)
+        .cloned();
     fs_type
 }
 
