@@ -8,7 +8,7 @@ use crate::{wwarn, StrResult, VfsMount};
 use alloc::sync::Arc;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use log::info;
+use log::{error, info};
 use spin::Mutex;
 
 pub struct File {
@@ -64,22 +64,24 @@ bitflags! {
     pub struct FileFlags:u32{
         const O_RDONLY = 0x1;
         const O_WRONLY = 0x2;
-        const O_RDWR = 0x3;
-        const O_CREAT = 0x4;
-        const O_EXCL = 0x8;
-        const O_TRUNC = 0x10;
-        const O_APPEND = 0x20;
-        const O_DIRECTORY = 0x40;
-        const O_NOFOLLOW = 0x80;
-        const O_CLOEXEC = 0x100;
+        const O_RDWR = 0x4;
+        const O_CREAT = 0x8;
+        const O_EXCL = 0x10;
+        const O_TRUNC = 0x20;
+        const O_APPEND = 0x40;
+        const O_DIRECTORY = 0x80;
+        const O_NOFOLLOW = 0x100;
+        const O_CLOEXEC = 0x200;
     }
 }
 bitflags! {
     pub struct FileMode:u32{
         const FMODE_READ = 0x1;
         const FMODE_WRITE = 0x2;
+        const FMODE_EXEC = 0x4;
     }
 }
+
 
 #[derive(Debug)]
 pub struct VmArea {
@@ -276,6 +278,7 @@ fn construct_file(
     let binding = lookup_data.mnt.lock();
     let mut sb = binding.super_block.lock();
     sb.insert_file(file.clone());
+    wwarn!("construct_file end");
     Ok(file)
 }
 
@@ -387,7 +390,7 @@ fn __recognize_last<T: ProcessFs>(
         .d_inode
         .lock()
         .mode
-        .contains(InodeMode::S_IFLNK)
+        .contains(InodeMode::S_SYMLINK)
     {
         __solve_link_file::<T>(flags, mode, inode, lookup_data, &mut count)?;
     }

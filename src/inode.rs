@@ -17,7 +17,7 @@ bitflags! {
         const S_DEL = 0x1;
     }
     pub struct InodeMode:u32{
-        const S_IFLNK = 0x1;
+        const S_SYMLINK = 0x1;
         const S_DIR = 0x2;
         const S_FILE = 0x4;
     }
@@ -26,7 +26,7 @@ bitflags! {
 #[derive(Debug)]
 pub struct Inode {
     /// 文件节点编号
-    pub number: u32,
+    pub number: usize,
     pub hard_links: u32,
     pub state: u32,
     pub flags: InodeFlags,
@@ -40,6 +40,7 @@ pub struct Inode {
     pub blk_size: u32,
     pub mode: InodeMode,
     pub file_size: usize,
+    /// 文件的块数量。以512字节为单位
     pub blk_count: usize,
     pub super_blk: Weak<Mutex<SuperBlock>>,
 }

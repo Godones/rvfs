@@ -19,7 +19,7 @@ use spin::Mutex;
 #[derive(Clone)]
 pub struct RamFsInode {
     // 节点号
-    number: u32,
+    number: usize,
     data: Vec<u8>,
     // 类型
     mode: InodeMode,
@@ -29,7 +29,7 @@ pub struct RamFsInode {
 }
 
 impl RamFsInode {
-    pub fn new(mode: InodeMode, attr: FileMode, number: u32) -> Self {
+    pub fn new(mode: InodeMode, attr: FileMode, number: usize) -> Self {
         let h_link = if mode == InodeMode::S_DIR { 2 } else { 1 };
         Self {
             number,
@@ -113,12 +113,12 @@ fn ramfs_kill_super_blk(_super_blk: Arc<Mutex<SuperBlock>>) {}
 
 /// 创建内存文件系统的根inode
 fn ramfs_create_root_inode(
-    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
     sb_blk: Arc<Mutex<SuperBlock>>,
     mode: InodeMode,
     inode_ops: InodeOps,
     file_ops: FileOps,
-    number: u32,
+    number: usize,
 ) -> StrResult<Arc<Mutex<Inode>>> {
     let inode = create_tmp_inode_from_sb_blk(sb_blk)?;
     let mut inode_lk = inode.lock();
@@ -149,20 +149,18 @@ fn ramfs_create_root_dentry(
     inode: Arc<Mutex<Inode>>,
 ) -> StrResult<Arc<Mutex<DirEntry>>> {
     let mut dentry = DirEntry::empty();
-    if parent.is_some() {
-        dentry.parent = Arc::downgrade(&(parent.unwrap()));
-    }
+    assert!(parent.is_none());
     dentry.d_inode = inode;
     dentry.d_name = "/".to_string();
     Ok(Arc::new(Mutex::new(dentry)))
 }
 
 fn ramfs_create_inode(
-    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
     dir: Arc<Mutex<Inode>>,
     mode: InodeMode,
     attr: FileMode,
-    number: u32,
+    number: usize,
     inode_ops: InodeOps,
     file_ops: FileOps,
 ) -> StrResult<Arc<Mutex<Inode>>> {
@@ -198,11 +196,11 @@ fn ramfs_create_inode(
 /// * dentry: 需要填充的目录项
 /// * attr: 目录的属性
 fn ramfs_mkdir(
-    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
     dir: Arc<Mutex<Inode>>,
     dentry: Arc<Mutex<DirEntry>>,
     attr: FileMode,
-    number: u32,
+    number: usize,
     inode_ops: InodeOps,
     file_ops: FileOps,
 ) -> StrResult<()> {
@@ -215,11 +213,11 @@ fn ramfs_mkdir(
 
 /// 创建内存文件系统的文件并返回目录项
 fn ramfs_create(
-    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
     dir: Arc<Mutex<Inode>>,
     dentry: Arc<Mutex<DirEntry>>,
     mode: FileMode,
-    number: u32,
+    number: usize,
     inode_ops: InodeOps,
     file_ops: FileOps,
 ) -> StrResult<()> {
@@ -239,7 +237,7 @@ fn ramfs_create(
 }
 
 fn ramfs_read_file(
-    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
     file: Arc<Mutex<File>>,
     buf: &mut [u8],
     offset: u64,
@@ -265,7 +263,7 @@ fn ramfs_read_file(
 }
 
 fn ramfs_write_file(
-    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
     file: Arc<Mutex<File>>,
     buf: &[u8],
     offset: u64,
@@ -290,7 +288,7 @@ fn ramfs_write_file(
 }
 
 fn ramfs_link(
-    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
     old_dentry: Arc<Mutex<DirEntry>>,
     dir: Arc<Mutex<Inode>>,
     new_dentry: Arc<Mutex<DirEntry>>,
@@ -314,7 +312,7 @@ fn ramfs_link(
 }
 
 fn ramfs_unlink(
-    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
     dir: Arc<Mutex<Inode>>,
     dentry: Arc<Mutex<DirEntry>>,
 ) -> StrResult<()> {
@@ -339,9 +337,9 @@ fn ramfs_unlink(
 }
 
 fn ramfs_symlink(
-    fs: Arc<Mutex<HashMap<u32, RamFsInode>>>,
+    fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
     mode: FileMode,
-    number: u32,
+    number: usize,
     dir: Arc<Mutex<Inode>>,
     dentry: Arc<Mutex<DirEntry>>,
     target: &str,
@@ -352,7 +350,7 @@ fn ramfs_symlink(
     let inode = ramfs_create_inode(
         fs.clone(),
         dir,
-        InodeMode::S_IFLNK,
+        InodeMode::S_SYMLINK,
         mode,
         number,
         inode_ops,

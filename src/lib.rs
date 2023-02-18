@@ -16,20 +16,19 @@ mod superblock;
 extern crate alloc;
 extern crate log;
 
-use crate::dentrry::DirEntry;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 pub use log::{info, warn};
 
 use crate::info::{ProcessFs, ProcessFsInfo};
 use crate::ramfs::rootfs::root_fs_type;
-pub use dentrry::*;
+pub use dentrry::{*};
 pub use file::*;
 use lazy_static::lazy_static;
 pub use mount::*;
 use spin::{Mutex, RwLock};
 pub use superblock::*;
-
+pub use inode::*;
 pub use link::*;
 pub use stat::*;
 pub type StrResult<T> = Result<T, &'static str>;

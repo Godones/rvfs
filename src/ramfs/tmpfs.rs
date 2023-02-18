@@ -12,16 +12,16 @@ use crate::{
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
 
 use spin::Mutex;
 
-static INODE_COUNT: AtomicU32 = AtomicU32::new(0);
+static INODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 lazy_static! {
-    static ref TMP_FS: Arc<Mutex<HashMap<u32, RamFsInode>>> = Arc::new(Mutex::new(HashMap::new()));
+    static ref TMP_FS: Arc<Mutex<HashMap<usize, RamFsInode>>> = Arc::new(Mutex::new(HashMap::new()));
 }
 
 pub const fn tmp_fs_type() -> FileSystemType {

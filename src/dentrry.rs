@@ -293,7 +293,7 @@ fn __generic_load_dentry<T: ProcessFs>(
         let inode_mode = inode.lock().mode;
 
         match inode_mode {
-            InodeMode::S_IFLNK => {
+            InodeMode::S_SYMLINK => {
                 // 链接文件
                 advance_link::<T>(lookup_data, next_dentry)?;
                 inode = lookup_data.dentry.lock().d_inode.clone();
@@ -358,7 +358,7 @@ fn __normal_load_dentry<T: ProcessFs>(
     advance_mount(&mut next_mnt, &mut next_dentry)?;
 
     // 如果是一个符号链接并且需要读取链接文件
-    if lookup_flags.contains(LookUpFlags::READ_LINK) && inode.lock().mode == InodeMode::S_IFLNK {
+    if lookup_flags.contains(LookUpFlags::READ_LINK) && inode.lock().mode == InodeMode::S_SYMLINK {
         // 处理链接文件
         advance_link::<T>(lookup_data, next_dentry.clone())?;
         inode = lookup_data.dentry.lock().d_inode.clone();

@@ -224,7 +224,7 @@ fn check_and_graft_tree(
         .d_inode
         .lock()
         .mode
-        .contains(InodeMode::S_IFLNK)
+        .contains(InodeMode::S_SYMLINK)
     {
         return Err("mnt is symlink");
     }
@@ -272,16 +272,16 @@ fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<(
      */
     drop(inode);
     drop(dentry);
-    let in_cache = look.dentry.lock().d_flags.contains(DirFlags::IN_HASH);
-
-    info!("**graft_tree: check in_cache ok");
+    // let in_cache = look.dentry.lock().d_flags.contains(DirFlags::IN_HASH);
+    //
+    // info!("**graft_tree: check in_cache ok");
 
     // TODO 修改判断挂载点可用的条件
-    let c = look.dentry.clone();
-    let p = look.dentry.lock().parent.upgrade().unwrap();
-    if !in_cache && Arc::ptr_eq(&c, &p) {
-        return Err("not in cache");
-    }
+    // let c = look.dentry.clone();
+    // let p = look.dentry.lock().parent.upgrade();
+    // if Arc::ptr_eq(&c, &p) {
+    //     return Err("not in cache");
+    // }
 
     // 设置父节点以及挂载点目录对象
     new_mount.lock().parent = Arc::downgrade(&look.mnt);

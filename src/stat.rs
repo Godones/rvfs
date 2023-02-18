@@ -7,7 +7,7 @@ use spin::Mutex;
 #[derive(Debug, Clone)]
 pub struct FileAttribute {
     pub dev: u32,
-    pub ino: u32,
+    pub ino: usize,
     pub i_mod: InodeMode,
     pub nlink: u32,
     pub uid: u32,

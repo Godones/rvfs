@@ -15,3 +15,5 @@ log = "0.4.17"
 
 [dev-dependencies]
 env_logger = "0.10.0"
+dbfs2 = {path = "../dbfs2"}
+jammdb = {path = "../jammdb"}
