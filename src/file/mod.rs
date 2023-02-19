@@ -1,143 +1,14 @@
-use crate::dentrry::{
-    __advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry, LookUpData,
-    LookUpFlags, PathType,
-};
 use crate::info::ProcessFs;
-use crate::inode::{Inode, InodeMode};
-use crate::{wwarn, StrResult, VfsMount};
+use crate::{
+    __advance_link, advance_mount, find_file_indir, path_walk, wwarn, DirContext, DirEntry, Inode,
+    InodeMode, LookUpData, LookUpFlags, PathType, StrResult,
+};
 use alloc::sync::Arc;
-use bitflags::bitflags;
-use core::fmt::{Debug, Formatter};
-use log::{error, info};
+use log::info;
 use spin::Mutex;
 
-pub struct File {
-    pub f_dentry: Arc<Mutex<DirEntry>>,
-    // 含有该文件的已经安装的文件系统
-    pub f_mnt: Arc<Mutex<VfsMount>>,
-    // 文件操作
-    pub f_ops: FileOps,
-    pub flags: FileFlags,
-    // 打开模式
-    pub f_mode: FileMode,
-    // 文件偏移量
-    pub f_pos: usize,
-    pub f_uid: u32,
-    pub f_gid: u32,
-}
-
-impl Debug for File {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("File")
-            .field("flags", &self.flags)
-            .field("f_mode", &self.f_mode)
-            .field("f_pos", &self.f_pos)
-            .field("f_uid", &self.f_uid)
-            .field("f_gid", &self.f_gid)
-            .field("f_dentry", &self.f_dentry)
-            .finish()
-    }
-}
-
-impl File {
-    pub fn new(
-        dentry: Arc<Mutex<DirEntry>>,
-        mnt: Arc<Mutex<VfsMount>>,
-        flags: FileFlags,
-        mode: FileMode,
-        f_ops: FileOps,
-    ) -> File {
-        File {
-            f_dentry: dentry,
-            f_mnt: mnt,
-            f_ops,
-            flags,
-            f_mode: mode,
-            f_pos: 0,
-            f_uid: 0,
-            f_gid: 0,
-        }
-    }
-}
-
-bitflags! {
-    pub struct FileFlags:u32{
-        const O_RDONLY = 0x1;
-        const O_WRONLY = 0x2;
-        const O_RDWR = 0x4;
-        const O_CREAT = 0x8;
-        const O_EXCL = 0x10;
-        const O_TRUNC = 0x20;
-        const O_APPEND = 0x40;
-        const O_DIRECTORY = 0x80;
-        const O_NOFOLLOW = 0x100;
-        const O_CLOEXEC = 0x200;
-    }
-}
-bitflags! {
-    pub struct FileMode:u32{
-        const FMODE_READ = 0x1;
-        const FMODE_WRITE = 0x2;
-        const FMODE_EXEC = 0x4;
-    }
-}
-
-
-#[derive(Debug)]
-pub struct VmArea {
-    pub vm_start: usize,
-    pub vm_end: usize,
-}
-
-#[derive(Clone)]
-pub struct FileOps {
-    pub llseek: fn(file: Arc<Mutex<File>>, offset: u64, whence: usize) -> StrResult<u64>,
-    pub read: fn(file: Arc<Mutex<File>>, buf: &mut [u8], offset: u64) -> StrResult<usize>,
-    pub write: fn(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResult<usize>,
-    // 对于设备文件来说，这个字段应该为NULL。它仅用于读取目录，只对文件系统有用。
-    // filldir_t用于提取目录项的各个字段。
-    // TODO readdir
-    pub readdir: fn(file: Arc<Mutex<File>>) -> StrResult<DirContext>,
-    /// 系统调用ioctl提供了一种执行设备特殊命令的方法(如格式化软盘的某个磁道，这既不是读也不是写操作)。
-    //另外，内核还能识别一部分ioctl命令，而不必调用fops表中的ioctl。如果设备不提供ioctl入口点，
-    // 则对于任何内核未预先定义的请求，ioctl系统调用将返回错误(-ENOTYY)
-    pub ioctl: fn(
-        dentry: Arc<Mutex<Inode>>,
-        file: Arc<Mutex<File>>,
-        cmd: u32,
-        arg: u64,
-    ) -> StrResult<isize>,
-    pub mmap: fn(file: Arc<Mutex<File>>, vma: VmArea) -> StrResult<()>,
-    pub open: fn(file: Arc<Mutex<File>>) -> StrResult<()>,
-    pub flush: fn(file: Arc<Mutex<File>>) -> StrResult<()>,
-    /// 该方法是fsync系统调用的后端实现
-    // 用户调用它来刷新待处理的数据。
-    // 如果驱动程序没有实现这一方法，fsync系统调用将返回-EINVAL。
-    pub fsync: fn(file: Arc<Mutex<File>>, datasync: bool) -> StrResult<()>,
-}
-
-impl Debug for FileOps {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("FileOps").finish()
-    }
-}
-
-impl FileOps {
-    pub const fn empty() -> FileOps {
-        FileOps {
-            llseek: |_, _, _| Err("NOT SUPPORT"),
-            read: |_, _, _| Err("NOT SUPPORT"),
-            write: |_, _, _| Err("NOT SUPPORT"),
-            readdir: |_| Err("NOT SUPPORT"),
-            ioctl: |_, _, _, _| Err("NOT SUPPORT"),
-            mmap: |_, _| Err("NOT SUPPORT"),
-            open: |_| Err("NOT SUPPORT"),
-            flush: |_| Err("NOT SUPPORT"),
-            fsync: |_, _| Err("NOT SUPPORT"),
-        }
-    }
-}
-
+mod define;
+pub use define::*;
 /// 打开文件
 /// * name:文件名
 /// * flags: 访问模式
@@ -182,6 +53,8 @@ pub fn vfs_read_file<T: ProcessFs>(
     read(file.clone(), buf, offset)
 }
 
+// pub fn vfs_open
+
 /// write file
 pub fn vfs_write_file<T: ProcessFs>(
     file: Arc<Mutex<File>>,
@@ -203,7 +76,7 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     wwarn!("vfs_mkdir");
     let lookup_data = path_walk::<T>(name, LookUpFlags::NOLAST);
     if lookup_data.is_err() {
-        return Err("Can't find father dir");
+        return Err("Can'dentry find father dir");
     }
     let mut lookup_data = lookup_data.unwrap();
     if lookup_data.path_type != PathType::PATH_NORMAL {
@@ -233,28 +106,18 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     Ok(())
 }
 
-pub fn generic_file_read(
-    _file: Arc<Mutex<File>>,
-    _buf: &mut [u8],
-    _offset: u64,
-) -> StrResult<usize> {
-    // let inode = file.lock().f_dentry.lock().d_inode.clone();
-    Ok(0)
+pub fn vfs_llseek<T: ProcessFs>(
+    file: Arc<Mutex<File>>,
+    offset: u64,
+    whence: SeekFrom,
+) -> StrResult<u64> {
+    let llseek = file.lock().f_ops.llseek;
+    llseek(file.clone(), offset, whence)
 }
 
-pub fn generic_file_write(_file: Arc<Mutex<File>>, _buf: &[u8], _offset: u64) -> StrResult<usize> {
-    Ok(0)
-}
-
-pub fn generic_file_readdir(_file: Arc<Mutex<File>>) -> StrResult<()> {
-    Ok(())
-}
-
-pub fn generic_file_ioctl(_file: Arc<Mutex<File>>, _cmd: u32, _arg: u32) -> StrResult<()> {
-    Ok(())
-}
-pub fn generic_file_mmap(_file: Arc<Mutex<File>>, _vma: VmArea) -> StrResult<()> {
-    Ok(())
+pub fn vfs_readdir<T: ProcessFs>(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
+    let readdir = file.lock().f_ops.readdir;
+    readdir(file)
 }
 
 fn construct_file(
@@ -379,7 +242,7 @@ fn __recognize_last<T: ProcessFs>(
     let mut find_dentry = find.as_ref().unwrap().clone();
     if find_dentry.lock().mount_count > 0 {
         if flags.contains(FileFlags::O_NOFOLLOW) {
-            return Err("Don't solve mount file");
+            return Err("Don'dentry solve mount file");
         }
         advance_mount(&mut lookup_data.mnt, &mut find_dentry)?;
         lookup_data.dentry = find_dentry.clone();

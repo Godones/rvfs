@@ -1,7 +1,7 @@
 pub mod rootfs;
 pub mod tmpfs;
 
-use crate::dentrry::DirEntry;
+use crate::dentry::DirEntry;
 use crate::file::FileOps;
 use crate::inode::{create_tmp_inode_from_sb_blk, simple_statfs, Inode, InodeMode, InodeOps};
 use crate::superblock::{FileSystemType, SuperBlock};

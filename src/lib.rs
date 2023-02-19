@@ -3,7 +3,7 @@
 #![no_std]
 //! virtual file system framework
 
-mod dentrry;
+mod dentry;
 mod file;
 mod info;
 mod inode;
@@ -15,22 +15,23 @@ mod superblock;
 
 extern crate alloc;
 extern crate log;
-
-use alloc::sync::Arc;
-use alloc::vec::Vec;
-pub use log::{info, warn};
-
 use crate::info::{ProcessFs, ProcessFsInfo};
 use crate::ramfs::rootfs::root_fs_type;
-pub use dentrry::{*};
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+pub use dentry::*;
 pub use file::*;
-use lazy_static::lazy_static;
-pub use mount::*;
-use spin::{Mutex, RwLock};
-pub use superblock::*;
 pub use inode::*;
+use lazy_static::lazy_static;
+pub use log::{info, warn};
+use spin::{Mutex, RwLock};
+
 pub use link::*;
+pub use mount::*;
+
 pub use stat::*;
+pub use superblock::*;
+
 pub type StrResult<T> = Result<T, &'static str>;
 
 lazy_static! {

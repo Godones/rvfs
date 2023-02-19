@@ -1,4 +1,4 @@
-use crate::dentrry::DirEntry;
+use crate::dentry::DirEntry;
 use crate::info::ProcessFs;
 use crate::inode::InodeMode;
 use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult};

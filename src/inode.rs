@@ -1,4 +1,4 @@
-use crate::dentrry::{DirEntry, LookUpData};
+use crate::dentry::{DirEntry, LookUpData};
 use crate::file::{FileMode, FileOps};
 use crate::superblock::{Device, SuperBlock};
 use crate::{wwarn, StatFs, StrResult};

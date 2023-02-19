@@ -1,4 +1,4 @@
-use crate::dentrry::{path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags};
+use crate::dentry::{path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags};
 use crate::info::ProcessFs;
 use crate::inode::{InodeFlags, InodeMode};
 use crate::superblock::{lookup_filesystem, DataOps, SuperBlock};
@@ -130,7 +130,7 @@ pub fn do_mount<T: ProcessFs>(
     //  查找找安装点的 dentry 数据结构
     let ret = path_walk::<T>(dir_name, LookUpFlags::READ_LINK);
     if ret.is_err() {
-        return Err("Can't find mount dir");
+        return Err("Can'dentry find mount dir");
     }
     info!("**do_mount: path_walk ok");
     let lookup_data = ret.unwrap();

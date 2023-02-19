@@ -1,4 +1,4 @@
-use crate::dentrry::DirEntry;
+use crate::dentry::DirEntry;
 use crate::inode::{Inode, InodeMode, InodeOps};
 use crate::ramfs::{
     ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk,
@@ -21,7 +21,8 @@ use spin::Mutex;
 static INODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 lazy_static! {
-    static ref TMP_FS: Arc<Mutex<HashMap<usize, RamFsInode>>> = Arc::new(Mutex::new(HashMap::new()));
+    static ref TMP_FS: Arc<Mutex<HashMap<usize, RamFsInode>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 }
 
 pub const fn tmp_fs_type() -> FileSystemType {

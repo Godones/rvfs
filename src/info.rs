@@ -1,4 +1,4 @@
-use crate::dentrry::DirEntry;
+use crate::dentry::DirEntry;
 use crate::VfsMount;
 use alloc::sync::Arc;
 use spin::Mutex;

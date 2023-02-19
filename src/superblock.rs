@@ -1,4 +1,4 @@
-use crate::dentrry::DirEntry;
+use crate::dentry::DirEntry;
 use crate::file::File;
 use crate::inode::Inode;
 use crate::mount::MountFlags;
