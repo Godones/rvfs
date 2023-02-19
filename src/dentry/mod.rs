@@ -326,7 +326,7 @@ pub fn advance_mount(
     let mut mount_count = next_dentry.lock().mount_count;
     let mut t_mnt = mnt.clone();
     let mut t_dentry = next_dentry.clone();
-    info!("dentry:{:#?}", t_dentry);
+    // info!("dentry:{:#?}", t_dentry);
     while mount_count > 0 {
         // 挂载点的根目录的mount_count必须大于0
         let child_mnt = lookup_mount(t_mnt.clone(), t_dentry.clone());
@@ -411,18 +411,18 @@ fn get_next_path_component(dir_name: &str) -> (&str, &str) {
     (next_path, component)
 }
 
-pub fn vfs_rename<T: ProcessFs>(old_name: &str, new_name: &str) -> StrResult<()> {
+pub fn vfs_rename<T: ProcessFs>(_old_name: &str, _new_name: &str) -> StrResult<()> {
     // parse name and get dentry
     unimplemented!()
 }
 
-pub fn vfs_rmdir<T: ProcessFs>(dir_name: &str) -> StrResult<()> {
+pub fn vfs_rmdir<T: ProcessFs>(_dir_name: &str) -> StrResult<()> {
     unimplemented!()
 }
 
 fn rename_parse(
-    old_name: &str,
-    new_name: &str,
+    _old_name: &str,
+    _new_name: &str,
 ) -> StrResult<(
     Arc<Mutex<Inode>>,
     Arc<Mutex<DirEntry>>,

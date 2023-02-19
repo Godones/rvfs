@@ -1,4 +1,4 @@
-use crate::dentry::{path_walk, DirEntry, DirFlags, LookUpData, LookUpFlags};
+use crate::dentry::{path_walk, DirEntry, LookUpData, LookUpFlags};
 use crate::info::ProcessFs;
 use crate::inode::{InodeFlags, InodeMode};
 use crate::superblock::{lookup_filesystem, DataOps, SuperBlock};

@@ -2,4 +2,4 @@ mod hardlink;
 mod symlink;
 
 pub use hardlink::{vfs_link, vfs_unlink};
-pub use symlink::vfs_symlink;
+pub use symlink::{vfs_symlink,vfs_readlink};

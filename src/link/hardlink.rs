@@ -3,7 +3,7 @@ use crate::info::ProcessFs;
 use crate::inode::InodeMode;
 use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult};
 use alloc::sync::Arc;
-use log::info;
+use log::{info};
 use spin::Mutex;
 /// decrease the hard link count of a file
 /// * name: the path of the file
@@ -83,7 +83,7 @@ pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
     }
 
     let target_dentry = Arc::new(Mutex::new(DirEntry::from_lookup_data(&new_lookup_data)));
-
+    // error!("vfs_link: target_dentry = {:#?}", target_dentry);
     // 调用函数创建一个链接文件
     let do_link = inode.lock().inode_ops.link;
     do_link(

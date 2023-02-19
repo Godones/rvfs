@@ -3,7 +3,7 @@ use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeMode};
 use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult};
 use alloc::borrow::ToOwned;
-use alloc::string::String;
+
 use alloc::sync::Arc;
 use log::info;
 use spin::Mutex;

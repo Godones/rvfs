@@ -16,7 +16,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use hashbrown::HashMap;
 
-use log::info;
+use log::{error, info};
 use spin::Mutex;
 
 #[derive(Clone)]
@@ -166,6 +166,7 @@ fn ramfs_create_inode(
     number: usize,
     inode_ops: InodeOps,
     file_ops: FileOps,
+    name: String,
 ) -> StrResult<Arc<Mutex<Inode>>> {
     wwarn!("ramfs_create_inode");
     // 创建raminode
@@ -181,15 +182,21 @@ fn ramfs_create_inode(
     inode_lock.number = ram_inode.number;
     inode_lock.hard_links = ram_inode.hard_links;
     inode_lock.mode = ram_inode.mode;
-    inode_lock.inode_ops = match ram_inode.mode {
-        InodeMode { .. } => inode_ops,
-    };
+    inode_lock.inode_ops = inode_ops;
     // TODO 根据文件类型设置inode的操作
-    inode_lock.file_ops = match ram_inode.mode {
-        InodeMode { .. } => file_ops,
-    };
+    inode_lock.file_ops = file_ops;
     inode_lock.file_size = ram_inode.data.len();
     drop(inode_lock);
+    // 在父目录中写入目录项
+    let mut dir_lock = dir.lock();
+    let number = dir_lock.number;
+    let mut bind = fs.lock();
+    let ram_inode = bind.get_mut(&number).unwrap();
+    error!("ramfs_create_inode: {:?}", name);
+    ram_inode.data.extend_from_slice(name.as_bytes());
+    ram_inode.data.push(0);
+    dir_lock.file_size = ram_inode.data.len();
+    drop(dir_lock);
     wwarn!("ramfs_create_inode end");
     Ok(inode)
 }
@@ -208,7 +215,16 @@ fn ramfs_mkdir(
     file_ops: FileOps,
 ) -> StrResult<()> {
     wwarn!("ramfs_mkdir");
-    let inode = ramfs_create_inode(fs, dir, InodeMode::S_DIR, attr, number, inode_ops, file_ops)?;
+    let inode = ramfs_create_inode(
+        fs,
+        dir,
+        InodeMode::S_DIR,
+        attr,
+        number,
+        inode_ops,
+        file_ops,
+        dentry.lock().d_name.clone(),
+    )?;
     dentry.lock().d_inode = inode;
     wwarn!("ramfs_mkdir end");
     Ok(())
@@ -233,6 +249,7 @@ fn ramfs_create(
         number,
         inode_ops,
         file_ops,
+        dentry.lock().d_name.clone(),
     )?;
     dentry.lock().d_inode = inode;
     wwarn!("rootfs_create end");
@@ -305,10 +322,16 @@ fn ramfs_link(
     let ram_inode = binding.get_mut(&inode_number).unwrap();
     ram_inode.hard_links += 1;
 
+
     drop(old_inode_lock);
     new_dentry.lock().d_inode = old_inode;
     let dir_lock = dir.lock();
     assert_eq!(dir_lock.mode, InodeMode::S_DIR);
+    let number = dir_lock.number;
+    let ram_inode = binding.get_mut(&number).unwrap();
+    let name = new_dentry.lock().d_name.clone();
+    ram_inode.data.extend_from_slice(name.as_bytes());
+    ram_inode.data.push(0);
     // TODO dir目录下需要增加一个(磁盘)目录项
     wwarn!("ramfs_link end");
     Ok(())
@@ -358,6 +381,7 @@ fn ramfs_symlink(
         number,
         inode_ops,
         file_ops,
+        dentry.lock().d_name.clone(),
     )?;
     let mut fs_lk = fs.lock();
     let ram_inode = fs_lk.get_mut(&number).unwrap();

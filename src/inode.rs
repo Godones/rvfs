@@ -2,7 +2,7 @@ use crate::dentry::{DirEntry, LookUpData};
 use crate::file::{FileMode, FileOps};
 use crate::superblock::{Device, SuperBlock};
 use crate::{wwarn, StatFs, StrResult};
-use alloc::string::{String, ToString};
+use alloc::string::{ToString};
 use alloc::sync::Arc;
 use alloc::sync::Weak;
 use bitflags::bitflags;

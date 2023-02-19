@@ -17,6 +17,7 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
+use log::error;
 
 use spin::Mutex;
 
@@ -48,7 +49,7 @@ const ROOTFS_DIR_INODE_OPS: InodeOps = {
 };
 
 const ROOTFS_FILE_INODE_OPS: InodeOps = {
-    let mut ops = InodeOps::empty();
+    let ops = InodeOps::empty();
     ops
 };
 
@@ -69,12 +70,14 @@ const ROOTFS_FILE_FILE_OPS: FileOps = {
 
 const ROOTFS_SYMLINK_FILE_OPS: FileOps = {
     let mut ops = FileOps::empty();
+    ops.open = |_| Ok(());
     ops
 };
 
 const ROOTFS_DIR_FILE_OPS: FileOps = {
     let mut ops = FileOps::empty();
     ops.readdir = rootfs_readdir;
+    ops.open = |_| Ok(());
     ops
 };
 
@@ -93,7 +96,7 @@ fn rootfs_get_super_blk(
         sb_blk.clone(),
         InodeMode::S_DIR,
         ROOTFS_DIR_INODE_OPS,
-        ROOTFS_FILE_FILE_OPS,
+        ROOTFS_DIR_FILE_OPS,
         number,
     )?;
     // 根目录硬链接计数不用自增1
@@ -121,7 +124,7 @@ fn rootfs_mkdir(
         attr,
         number,
         ROOTFS_DIR_INODE_OPS,
-        ROOTFS_FILE_FILE_OPS,
+        ROOTFS_DIR_FILE_OPS,
     )?;
     wwarn!("rootfs_mkdir end");
     Ok(())
@@ -133,6 +136,7 @@ fn rootfs_create(
     mode: FileMode,
 ) -> StrResult<()> {
     wwarn!("rootfs_create");
+    error!("***** {}",dentry.lock().d_name);
     let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_create(
         ROOT_FS.clone(),
@@ -140,7 +144,7 @@ fn rootfs_create(
         dentry,
         mode,
         number,
-        ROOTFS_DIR_INODE_OPS,
+        ROOTFS_FILE_INODE_OPS,
         ROOTFS_FILE_FILE_OPS,
     )?;
     wwarn!("rootfs_create end");

@@ -95,12 +95,12 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     info!("create new dir");
     // 调用函数创建一个新的目录
     let target_dentry = Arc::new(Mutex::new(DirEntry::empty()));
-    let mkdir = inode.lock().inode_ops.mkdir;
-    mkdir(inode, target_dentry.clone(), mode)?;
     // 设置目录名
     target_dentry.lock().d_name = last;
     // 设置父子关系
     target_dentry.lock().parent = Arc::downgrade(&dentry);
+    let mkdir = inode.lock().inode_ops.mkdir;
+    mkdir(inode, target_dentry.clone(), mode)?;
     dentry.lock().insert_child(target_dentry);
     // TODO dentry 插入全局链表
     Ok(())
@@ -225,10 +225,10 @@ fn __recognize_last<T: ProcessFs>(
         info!("create file in dir {}", lookup_data.dentry.lock().d_name);
         let create_func = inode.lock().inode_ops.create;
         let target_dentry = Arc::new(Mutex::new(DirEntry::empty()));
-        create_func(inode.clone(), target_dentry.clone(), mode)?;
         // 设置dentry信息
         target_dentry.lock().d_name = lookup_data.last.clone();
         target_dentry.lock().parent = Arc::downgrade(&lookup_data.dentry);
+        create_func(inode.clone(), target_dentry.clone(), mode)?;
         lookup_data
             .dentry
             .lock()

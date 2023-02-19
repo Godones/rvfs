@@ -48,7 +48,7 @@ const TMPFS_DIR_INODE_OPS: InodeOps = {
 };
 
 const TMPFS_FILE_INODE_OPS: InodeOps = {
-    let mut ops = InodeOps::empty();
+    let ops = InodeOps::empty();
     ops
 };
 
@@ -68,7 +68,7 @@ const TMPFS_FILE_FILE_OPS: FileOps = {
 };
 
 const TMPFS_SYMLINK_FILE_OPS: FileOps = {
-    let mut ops = FileOps::empty();
+    let ops = FileOps::empty();
     ops
 };
 
