@@ -3,6 +3,7 @@ use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeMode};
 use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult};
 use alloc::borrow::ToOwned;
+use alloc::string::String;
 use alloc::sync::Arc;
 use log::info;
 use spin::Mutex;
@@ -65,4 +66,23 @@ fn may_create(dir: Arc<Mutex<Inode>>, child: Arc<Mutex<DirEntry>>) -> StrResult<
     // }
     wwarn!("may_create: end");
     Ok(())
+}
+
+pub fn vfs_readlink<T: ProcessFs>(path: &str, buf: &mut [u8]) -> StrResult<usize> {
+    wwarn!("vfs_readlink");
+    let lookup_data = path_walk::<T>(path, LookUpFlags::empty())?;
+    let dentry = lookup_data.dentry.clone();
+    let inode = lookup_data.dentry.lock().d_inode.clone();
+    let mode = inode.lock().mode;
+    let len = match mode {
+        InodeMode::S_SYMLINK => {
+            let readlink = inode.lock().inode_ops.readlink;
+            readlink(dentry, buf)?
+        }
+        _ => {
+            return Err("It is not a symlink");
+        }
+    };
+    wwarn!("vfs_readlink: end");
+    Ok(len)
 }

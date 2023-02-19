@@ -2,7 +2,7 @@ use crate::dentry::{DirEntry, LookUpData};
 use crate::file::{FileMode, FileOps};
 use crate::superblock::{Device, SuperBlock};
 use crate::{wwarn, StatFs, StrResult};
-use alloc::string::ToString;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::sync::Weak;
 use bitflags::bitflags;
@@ -69,6 +69,7 @@ impl Inode {
 pub struct InodeOps {
     pub follow_link:
         fn(dentry: Arc<Mutex<DirEntry>>, lookup_data: &mut LookUpData) -> StrResult<()>,
+    pub readlink: fn(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize>,
     pub lookup: fn(
         dentry: Arc<Mutex<DirEntry>>,
         lookup_data: &mut LookUpData,
@@ -103,6 +104,7 @@ impl InodeOps {
     pub const fn empty() -> Self {
         Self {
             follow_link: |_, _| Err("Not support"),
+            readlink: |_, _| Err("Not support"),
             lookup: |_, _| Err("Not support"),
             create: |_, _, _| Err("Not support"),
             mkdir: |_, _, _| Err("Not support"),

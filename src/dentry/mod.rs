@@ -8,13 +8,6 @@ pub use define::*;
 use log::info;
 use spin::Mutex;
 
-pub fn rename_dentry<T: ProcessFs>(
-    _old_dentry: Arc<Mutex<DirEntry>>,
-    _new_dentry: Arc<Mutex<DirEntry>>,
-) -> StrResult<()> {
-    unimplemented!()
-}
-
 /// 当删除物理文件时，释放缓存描述符的引用并将其从哈希表中删除
 pub fn remove_dentry_cache(_dentry: Arc<Mutex<DirEntry>>) {
     unimplemented!()
@@ -416,6 +409,27 @@ fn get_next_path_component(dir_name: &str) -> (&str, &str) {
         component = dir_name;
     }
     (next_path, component)
+}
+
+pub fn vfs_rename<T: ProcessFs>(old_name: &str, new_name: &str) -> StrResult<()> {
+    // parse name and get dentry
+    unimplemented!()
+}
+
+pub fn vfs_rmdir<T: ProcessFs>(dir_name: &str) -> StrResult<()> {
+    unimplemented!()
+}
+
+fn rename_parse(
+    old_name: &str,
+    new_name: &str,
+) -> StrResult<(
+    Arc<Mutex<Inode>>,
+    Arc<Mutex<DirEntry>>,
+    Arc<Mutex<Inode>>,
+    Arc<Mutex<DirEntry>>,
+)> {
+    unimplemented!()
 }
 
 #[cfg(test)]

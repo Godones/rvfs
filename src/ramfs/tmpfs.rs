@@ -1,13 +1,15 @@
 use crate::dentry::DirEntry;
 use crate::inode::{Inode, InodeMode, InodeOps};
 use crate::ramfs::{
-    ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk,
-    ramfs_mkdir, ramfs_read_file, ramfs_simple_super_blk, ramfs_symlink, ramfs_write_file,
+    ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_follow_link,
+    ramfs_kill_super_blk, ramfs_mkdir, ramfs_read_file, ramfs_read_link, ramfs_simple_super_blk,
+    ramfs_symlink, ramfs_write_file,
 };
 use crate::ramfs::{ramfs_link, ramfs_unlink, RamFsInode};
 use crate::superblock::SuperBlock;
 use crate::{
-    wwarn, DataOps, File, FileMode, FileOps, FileSystemAttr, FileSystemType, MountFlags, StrResult,
+    wwarn, DataOps, DirContext, File, FileMode, FileOps, FileSystemAttr, FileSystemType,
+    LookUpData, MountFlags, StrResult,
 };
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -35,7 +37,7 @@ pub const fn tmp_fs_type() -> FileSystemType {
     }
 }
 
-const fn root_fs_inode_ops() -> InodeOps {
+const TMPFS_DIR_INODE_OPS: InodeOps = {
     let mut ops = InodeOps::empty();
     ops.mkdir = tmpfs_mkdir;
     ops.create = tmpfs_create;
@@ -43,15 +45,38 @@ const fn root_fs_inode_ops() -> InodeOps {
     ops.unlink = tmpfs_unlink;
     ops.symlink = tmpfs_symlink;
     ops
-}
+};
 
-const fn root_fs_file_ops() -> FileOps {
+const TMPFS_FILE_INODE_OPS: InodeOps = {
+    let mut ops = InodeOps::empty();
+    ops
+};
+
+const TMPFS_SYMLINK_INODE_OPS: InodeOps = {
+    let mut ops = InodeOps::empty();
+    ops.readlink = tmpfs_readlink;
+    ops.follow_link = tmpfs_follow_link;
+    ops
+};
+
+const TMPFS_FILE_FILE_OPS: FileOps = {
     let mut ops = FileOps::empty();
     ops.read = tmpfs_read_file;
     ops.write = tmpfs_write_file;
     ops.open = |_| Ok(());
     ops
-}
+};
+
+const TMPFS_SYMLINK_FILE_OPS: FileOps = {
+    let mut ops = FileOps::empty();
+    ops
+};
+
+const TMPFS_DIR_FILE_OPS: FileOps = {
+    let mut ops = FileOps::empty();
+    ops.readdir = tmpfs_readdir;
+    ops
+};
 
 fn tmpfs_get_super_blk(
     fs_type: Arc<Mutex<FileSystemType>>,
@@ -67,8 +92,8 @@ fn tmpfs_get_super_blk(
         TMP_FS.clone(),
         sb_blk.clone(),
         InodeMode::S_DIR,
-        root_fs_inode_ops(),
-        root_fs_file_ops(),
+        TMPFS_DIR_INODE_OPS,
+        TMPFS_DIR_FILE_OPS,
         number,
     )?;
     // 根目录硬链接计数不用自增1
@@ -95,8 +120,8 @@ fn tmpfs_mkdir(
         dentry,
         attr,
         number,
-        root_fs_inode_ops(),
-        root_fs_file_ops(),
+        TMPFS_DIR_INODE_OPS,
+        TMPFS_DIR_FILE_OPS,
     )?;
     wwarn!("tmpfs_mkdir end");
     Ok(())
@@ -115,8 +140,8 @@ fn tmpfs_create(
         dentry,
         mode,
         number,
-        root_fs_inode_ops(),
-        root_fs_file_ops(),
+        TMPFS_FILE_INODE_OPS,
+        TMPFS_FILE_FILE_OPS,
     )?;
     wwarn!("tmpfs_create end");
     Ok(())
@@ -167,9 +192,43 @@ fn tmpfs_symlink(
         dir,
         dentry,
         target,
-        InodeOps::empty(),
-        FileOps::empty(),
+        TMPFS_SYMLINK_INODE_OPS,
+        TMPFS_SYMLINK_FILE_OPS,
     )?;
     wwarn!("tmpfs_symlink end");
     Ok(())
+}
+
+/// read the target of a symbolic link
+fn tmpfs_readlink(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize> {
+    let inode = dentry.lock().d_inode.clone();
+    let inode = inode.lock();
+    let number = inode.number;
+    let bind = TMP_FS.lock();
+    let ram_inode = bind.get(&number).unwrap();
+    ramfs_read_link(ram_inode, buf)
+}
+
+/// follow a symbolic link
+fn tmpfs_follow_link(dentry: Arc<Mutex<DirEntry>>, lookup_data: &mut LookUpData) -> StrResult<()> {
+    let inode = dentry.lock().d_inode.clone();
+    let inode = inode.lock();
+    let number = inode.number;
+    let bind = TMP_FS.lock();
+    let ram_inode = bind.get(&number).unwrap();
+    ramfs_follow_link(&ram_inode, lookup_data)
+}
+
+/// read the contents of a directory
+fn tmpfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
+    wwarn!("rootfs_readdir");
+    let inode = file.lock().f_dentry.lock().d_inode.clone();
+    let inode = inode.lock();
+    let number = inode.number;
+    let bind = TMP_FS.lock();
+    let ram_inode = bind.get(&number).unwrap();
+    let data = ram_inode.data.clone();
+    let dir_context = DirContext::new(data);
+    wwarn!("rootfs_readdir end");
+    Ok(dir_context)
 }

@@ -5,9 +5,12 @@ use crate::dentry::DirEntry;
 use crate::file::FileOps;
 use crate::inode::{create_tmp_inode_from_sb_blk, simple_statfs, Inode, InodeMode, InodeOps};
 use crate::superblock::{FileSystemType, SuperBlock};
-use crate::{find_super_blk, wwarn, DataOps, File, FileMode, MountFlags, StrResult, SuperBlockOps};
+use crate::{
+    find_super_blk, wwarn, DataOps, File, FileMode, LookUpData, MountFlags, StrResult,
+    SuperBlockOps,
+};
 use alloc::boxed::Box;
-use alloc::string::ToString;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -362,5 +365,25 @@ fn ramfs_symlink(
     inode.lock().file_size = target.len();
     dentry.lock().d_inode = inode;
     wwarn!("ramfs_symlink end");
+    Ok(())
+}
+
+fn ramfs_read_link(ram_inode: &RamFsInode, buf: &mut [u8]) -> StrResult<usize> {
+    wwarn!("ramfs_read_link");
+    let read_len = core::cmp::min(buf.len(), ram_inode.data.len());
+    unsafe {
+        core::ptr::copy(ram_inode.data.as_ptr(), buf.as_mut_ptr(), read_len);
+    }
+    wwarn!("ramfs_read_link end");
+    Ok(read_len)
+}
+
+/// TODO
+fn ramfs_follow_link(ram_inode: &RamFsInode, lookup_data: &mut LookUpData) -> StrResult<()> {
+    wwarn!("ramfs_follow_link");
+    let target_name = ram_inode.data.clone();
+    let name = String::from_utf8(target_name.clone()).unwrap();
+    lookup_data.symlink_names.push(name);
+    wwarn!("ramfs_follow_link end");
     Ok(())
 }

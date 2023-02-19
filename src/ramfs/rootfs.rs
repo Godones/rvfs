@@ -1,13 +1,15 @@
 use crate::dentry::DirEntry;
 use crate::inode::{Inode, InodeMode, InodeOps};
 use crate::ramfs::{
-    ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_kill_super_blk,
-    ramfs_mkdir, ramfs_read_file, ramfs_simple_super_blk, ramfs_symlink, ramfs_write_file,
+    ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_follow_link,
+    ramfs_kill_super_blk, ramfs_mkdir, ramfs_read_file, ramfs_read_link, ramfs_simple_super_blk,
+    ramfs_symlink, ramfs_write_file,
 };
 use crate::ramfs::{ramfs_link, ramfs_unlink, RamFsInode};
 use crate::superblock::SuperBlock;
 use crate::{
-    wwarn, DataOps, File, FileMode, FileOps, FileSystemAttr, FileSystemType, MountFlags, StrResult,
+    wwarn, DataOps, DirContext, File, FileMode, FileOps, FileSystemAttr, FileSystemType,
+    LookUpData, MountFlags, StrResult,
 };
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -35,7 +37,7 @@ pub const fn root_fs_type() -> FileSystemType {
     }
 }
 
-const fn root_fs_inode_ops() -> InodeOps {
+const ROOTFS_DIR_INODE_OPS: InodeOps = {
     let mut ops = InodeOps::empty();
     ops.mkdir = rootfs_mkdir;
     ops.create = rootfs_create;
@@ -43,15 +45,38 @@ const fn root_fs_inode_ops() -> InodeOps {
     ops.unlink = rootfs_unlink;
     ops.symlink = rootfs_symlink;
     ops
-}
+};
 
-const fn root_fs_file_ops() -> FileOps {
+const ROOTFS_FILE_INODE_OPS: InodeOps = {
+    let mut ops = InodeOps::empty();
+    ops
+};
+
+const ROOTFS_SYMLINK_INODE_OPS: InodeOps = {
+    let mut ops = InodeOps::empty();
+    ops.readlink = rootfs_readlink;
+    ops.follow_link = rootfs_follow_link;
+    ops
+};
+
+const ROOTFS_FILE_FILE_OPS: FileOps = {
     let mut ops = FileOps::empty();
     ops.read = rootfs_read_file;
     ops.write = rootfs_write_file;
     ops.open = |_| Ok(());
     ops
-}
+};
+
+const ROOTFS_SYMLINK_FILE_OPS: FileOps = {
+    let mut ops = FileOps::empty();
+    ops
+};
+
+const ROOTFS_DIR_FILE_OPS: FileOps = {
+    let mut ops = FileOps::empty();
+    ops.readdir = rootfs_readdir;
+    ops
+};
 
 fn rootfs_get_super_blk(
     fs_type: Arc<Mutex<FileSystemType>>,
@@ -67,8 +92,8 @@ fn rootfs_get_super_blk(
         ROOT_FS.clone(),
         sb_blk.clone(),
         InodeMode::S_DIR,
-        root_fs_inode_ops(),
-        root_fs_file_ops(),
+        ROOTFS_DIR_INODE_OPS,
+        ROOTFS_FILE_FILE_OPS,
         number,
     )?;
     // 根目录硬链接计数不用自增1
@@ -95,8 +120,8 @@ fn rootfs_mkdir(
         dentry,
         attr,
         number,
-        root_fs_inode_ops(),
-        root_fs_file_ops(),
+        ROOTFS_DIR_INODE_OPS,
+        ROOTFS_FILE_FILE_OPS,
     )?;
     wwarn!("rootfs_mkdir end");
     Ok(())
@@ -115,8 +140,8 @@ fn rootfs_create(
         dentry,
         mode,
         number,
-        root_fs_inode_ops(),
-        root_fs_file_ops(),
+        ROOTFS_DIR_INODE_OPS,
+        ROOTFS_FILE_FILE_OPS,
     )?;
     wwarn!("rootfs_create end");
     Ok(())
@@ -167,9 +192,43 @@ fn rootfs_symlink(
         dir,
         dentry,
         target,
-        InodeOps::empty(),
-        FileOps::empty(),
+        ROOTFS_SYMLINK_INODE_OPS,
+        ROOTFS_SYMLINK_FILE_OPS,
     )?;
     wwarn!("rootfs_symlink end");
     Ok(())
+}
+
+/// read the target of a symbolic link
+fn rootfs_readlink(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize> {
+    let inode = dentry.lock().d_inode.clone();
+    let inode = inode.lock();
+    let number = inode.number;
+    let bind = ROOT_FS.lock();
+    let ram_inode = bind.get(&number).unwrap();
+    ramfs_read_link(ram_inode, buf)
+}
+
+/// follow a symbolic link
+fn rootfs_follow_link(dentry: Arc<Mutex<DirEntry>>, lookup_data: &mut LookUpData) -> StrResult<()> {
+    let inode = dentry.lock().d_inode.clone();
+    let inode = inode.lock();
+    let number = inode.number;
+    let bind = ROOT_FS.lock();
+    let ram_inode = bind.get(&number).unwrap();
+    ramfs_follow_link(&ram_inode, lookup_data)
+}
+
+/// read the contents of a directory
+fn rootfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
+    wwarn!("rootfs_readdir");
+    let inode = file.lock().f_dentry.lock().d_inode.clone();
+    let inode = inode.lock();
+    let number = inode.number;
+    let bind = ROOT_FS.lock();
+    let ram_inode = bind.get(&number).unwrap();
+    let data = ram_inode.data.clone();
+    let dir_context = DirContext::new(data);
+    wwarn!("rootfs_readdir end");
+    Ok(dir_context)
 }

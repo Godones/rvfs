@@ -106,18 +106,25 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     Ok(())
 }
 
-pub fn vfs_llseek<T: ProcessFs>(
-    file: Arc<Mutex<File>>,
-    offset: u64,
-    whence: SeekFrom,
-) -> StrResult<u64> {
+/// llseek
+pub fn vfs_llseek(file: Arc<Mutex<File>>, offset: u64, whence: SeekFrom) -> StrResult<u64> {
     let llseek = file.lock().f_ops.llseek;
     llseek(file.clone(), offset, whence)
 }
 
-pub fn vfs_readdir<T: ProcessFs>(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
+pub fn vfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
     let readdir = file.lock().f_ops.readdir;
     readdir(file)
+}
+
+pub fn vfs_fsync(file: Arc<Mutex<File>>) -> StrResult<()> {
+    // check file mode
+    let mode = file.lock().f_mode;
+    if !mode.contains(FileMode::FMODE_WRITE) {
+        return Err("file not open for writing");
+    }
+    let fsync = file.lock().f_ops.fsync;
+    fsync(file, true)
 }
 
 fn construct_file(
