@@ -29,6 +29,7 @@ pub struct RamFsInode {
     hard_links: u32,
     // 读写权限
     attr: FileMode,
+    ex_attr: HashMap<String, Vec<u8>>,
 }
 
 impl RamFsInode {
@@ -40,6 +41,7 @@ impl RamFsInode {
             mode,
             hard_links: h_link,
             attr,
+            ex_attr: HashMap::new(),
         }
     }
 }

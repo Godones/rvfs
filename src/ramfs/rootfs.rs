@@ -12,8 +12,10 @@ use crate::{
     LookUpData, MountFlags, StrResult,
 };
 use alloc::boxed::Box;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::cmp::min;
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
@@ -48,11 +50,19 @@ const ROOTFS_DIR_INODE_OPS: InodeOps = {
     ops.unlink = rootfs_unlink;
     ops.symlink = rootfs_symlink;
     ops.rmdir = rootfs_rmdir;
+    ops.get_attr = rootfs_get_attr;
+    ops.set_attr = rootfs_set_attr;
+    ops.remove_attr = rootfs_remove_attr;
+    ops.list_attr = rootfs_list_attr;
     ops
 };
 
 const ROOTFS_FILE_INODE_OPS: InodeOps = {
-    let ops = InodeOps::empty();
+    let mut ops = InodeOps::empty();
+    ops.get_attr = rootfs_get_attr;
+    ops.set_attr = rootfs_set_attr;
+    ops.remove_attr = rootfs_remove_attr;
+    ops.list_attr = rootfs_list_attr;
     ops
 };
 
@@ -60,6 +70,10 @@ const ROOTFS_SYMLINK_INODE_OPS: InodeOps = {
     let mut ops = InodeOps::empty();
     ops.readlink = rootfs_readlink;
     ops.follow_link = rootfs_follow_link;
+    ops.get_attr = rootfs_get_attr;
+    ops.set_attr = rootfs_set_attr;
+    ops.remove_attr = rootfs_remove_attr;
+    ops.list_attr = rootfs_list_attr;
     ops
 };
 
@@ -266,4 +280,47 @@ fn rootfs_rmdir(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResu
     bind.remove(&sub_number);
     wwarn!("rootfs_rmdir end");
     Ok(())
+}
+
+fn rootfs_get_attr(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &mut [u8]) -> StrResult<usize> {
+    let inode = dentry.lock().d_inode.clone();
+    let number = inode.lock().number;
+    let bind = ROOT_FS.lock();
+    let ram_inode = bind.get(&number).unwrap();
+    let ex_attr = ram_inode.ex_attr.get(key).unwrap();
+    let len = ex_attr.as_slice().len();
+    let min_len = min(len, val.len());
+    val[..min_len].copy_from_slice(&ex_attr.as_slice()[..min_len]);
+    Ok(min_len)
+}
+fn rootfs_set_attr(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &[u8]) -> StrResult<()> {
+    let inode = dentry.lock().d_inode.clone();
+    let number = inode.lock().number;
+    let mut bind = ROOT_FS.lock();
+    let ram_inode = bind.get_mut(&number).unwrap();
+    ram_inode.ex_attr.insert(key.to_string(), val.to_vec());
+    Ok(())
+}
+fn rootfs_remove_attr(dentry: Arc<Mutex<DirEntry>>, key: &str) -> StrResult<()> {
+    let inode = dentry.lock().d_inode.clone();
+    let number = inode.lock().number;
+    let mut bind = ROOT_FS.lock();
+    let ram_inode = bind.get_mut(&number).unwrap();
+    ram_inode.ex_attr.remove(key);
+    Ok(())
+}
+fn rootfs_list_attr(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize> {
+    let inode = dentry.lock().d_inode.clone();
+    let number = inode.lock().number;
+    let bind = ROOT_FS.lock();
+    let ram_inode = bind.get(&number).unwrap();
+    let mut attr_list = String::new();
+    for (key, _) in ram_inode.ex_attr.iter() {
+        attr_list.push_str(key);
+        attr_list.push(0 as char);
+    }
+    let len = attr_list.as_bytes().len();
+    let min_len = min(len, buf.len());
+    buf[..min_len].copy_from_slice(&attr_list.as_bytes()[..min_len]);
+    Ok(min_len)
 }

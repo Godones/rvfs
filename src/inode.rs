@@ -8,7 +8,6 @@ use alloc::sync::Weak;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 
-
 use spin::Mutex;
 
 bitflags! {
@@ -116,8 +115,8 @@ impl InodeOps {
             unlink: |_, _| Err("Not support"),
             get_attr: |_, _, _| Err("Not support"),
             set_attr: |_, _, _| Err("Not support"),
-            remove_attr: |_,_|Err("Not support"),
-            list_attr: |_,_|Err("Not support"),
+            remove_attr: |_, _| Err("Not support"),
+            list_attr: |_, _| Err("Not support"),
             symlink: |_, _, _| Err("Not support"),
         }
     }

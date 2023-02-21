@@ -12,8 +12,10 @@ use crate::{
     LookUpData, MountFlags, StrResult,
 };
 use alloc::boxed::Box;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::cmp::min;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
 use kmpsearch::Haystack;
@@ -46,11 +48,19 @@ const TMPFS_DIR_INODE_OPS: InodeOps = {
     ops.unlink = tmpfs_unlink;
     ops.symlink = tmpfs_symlink;
     ops.rmdir = tmpfs_rmdir;
+    ops.get_attr = tmpfs_get_attr;
+    ops.set_attr = tmpfs_set_attr;
+    ops.remove_attr = tmpfs_remove_attr;
+    ops.list_attr = tmpfs_list_attr;
     ops
 };
 
 const TMPFS_FILE_INODE_OPS: InodeOps = {
-    let ops = InodeOps::empty();
+    let mut ops = InodeOps::empty();
+    ops.get_attr = tmpfs_get_attr;
+    ops.set_attr = tmpfs_set_attr;
+    ops.remove_attr = tmpfs_remove_attr;
+    ops.list_attr = tmpfs_list_attr;
     ops
 };
 
@@ -58,6 +68,10 @@ const TMPFS_SYMLINK_INODE_OPS: InodeOps = {
     let mut ops = InodeOps::empty();
     ops.readlink = tmpfs_readlink;
     ops.follow_link = tmpfs_follow_link;
+    ops.get_attr = tmpfs_get_attr;
+    ops.set_attr = tmpfs_set_attr;
+    ops.remove_attr = tmpfs_remove_attr;
+    ops.list_attr = tmpfs_list_attr;
     ops
 };
 
@@ -261,4 +275,47 @@ fn tmpfs_rmdir(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResul
     bind.remove(&sub_number);
     wwarn!("rootfs_rmdir end");
     Ok(())
+}
+
+fn tmpfs_get_attr(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &mut [u8]) -> StrResult<usize> {
+    let inode = dentry.lock().d_inode.clone();
+    let number = inode.lock().number;
+    let bind = TMP_FS.lock();
+    let ram_inode = bind.get(&number).unwrap();
+    let ex_attr = ram_inode.ex_attr.get(key).unwrap();
+    let len = ex_attr.as_slice().len();
+    let min_len = min(len, val.len());
+    val[..min_len].copy_from_slice(&ex_attr.as_slice()[..min_len]);
+    Ok(min_len)
+}
+fn tmpfs_set_attr(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &[u8]) -> StrResult<()> {
+    let inode = dentry.lock().d_inode.clone();
+    let number = inode.lock().number;
+    let mut bind = TMP_FS.lock();
+    let ram_inode = bind.get_mut(&number).unwrap();
+    ram_inode.ex_attr.insert(key.to_string(), val.to_vec());
+    Ok(())
+}
+fn tmpfs_remove_attr(dentry: Arc<Mutex<DirEntry>>, key: &str) -> StrResult<()> {
+    let inode = dentry.lock().d_inode.clone();
+    let number = inode.lock().number;
+    let mut bind = TMP_FS.lock();
+    let ram_inode = bind.get_mut(&number).unwrap();
+    ram_inode.ex_attr.remove(key);
+    Ok(())
+}
+fn tmpfs_list_attr(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize> {
+    let inode = dentry.lock().d_inode.clone();
+    let number = inode.lock().number;
+    let bind = TMP_FS.lock();
+    let ram_inode = bind.get(&number).unwrap();
+    let mut attr_list = String::new();
+    for (key, _) in ram_inode.ex_attr.iter() {
+        attr_list.push_str(key);
+        attr_list.push(0 as char);
+    }
+    let len = attr_list.as_bytes().len();
+    let min_len = min(len, buf.len());
+    buf[..min_len].copy_from_slice(&attr_list.as_bytes()[..min_len]);
+    Ok(min_len)
 }
