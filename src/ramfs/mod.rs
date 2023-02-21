@@ -16,7 +16,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use hashbrown::HashMap;
 
-use log::{error, info};
+use log::info;
 use spin::Mutex;
 
 #[derive(Clone)]
@@ -192,7 +192,6 @@ fn ramfs_create_inode(
     let number = dir_lock.number;
     let mut bind = fs.lock();
     let ram_inode = bind.get_mut(&number).unwrap();
-    error!("ramfs_create_inode: {:?}", name);
     ram_inode.data.extend_from_slice(name.as_bytes());
     ram_inode.data.push(0);
     dir_lock.file_size = ram_inode.data.len();
@@ -322,7 +321,6 @@ fn ramfs_link(
     let ram_inode = binding.get_mut(&inode_number).unwrap();
     ram_inode.hard_links += 1;
 
-
     drop(old_inode_lock);
     new_dentry.lock().d_inode = old_inode;
     let dir_lock = dir.lock();
@@ -350,11 +348,12 @@ fn ramfs_unlink(
     let inode = dentry.lock().d_inode.clone();
     let mut inode_lock = inode.lock();
     inode_lock.hard_links -= 1;
+
+    let number = inode_lock.number;
+    let mut binding = fs.lock();
+    let ram_inode = binding.get_mut(&number).unwrap();
+    ram_inode.hard_links -= 1;
     if inode_lock.hard_links == 0 {
-        let number = inode_lock.number;
-        let mut binding = fs.lock();
-        let ram_inode = binding.get_mut(&number).unwrap();
-        ram_inode.hard_links -= 1;
         assert_eq!(ram_inode.hard_links, 0);
         binding.remove(&number);
     }

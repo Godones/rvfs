@@ -2,7 +2,7 @@ use crate::dentry::{DirEntry, LookUpData};
 use crate::file::{FileMode, FileOps};
 use crate::superblock::{Device, SuperBlock};
 use crate::{wwarn, StatFs, StrResult};
-use alloc::string::{ToString};
+use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::sync::Weak;
 use bitflags::bitflags;
@@ -13,8 +13,8 @@ use spin::Mutex;
 
 bitflags! {
     pub struct InodeFlags:u32{
-        // 目录被删除了(但是内存中还存在)
         const S_DEL = 0x1;
+        const S_CACHE = 0x2;
     }
     pub struct InodeMode:u32{
         const S_SYMLINK = 0x1;
@@ -80,6 +80,7 @@ pub struct InodeOps {
     /// mkdir(dir, dentry, mode)  在某个目录下，为与目录项对应的目录创建一个新的索引节点
     pub mkdir:
         fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, mode: FileMode) -> StrResult<()>,
+    pub rmdir: fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()>,
     /// 在某个目录下，创建一个硬链接
     pub link: fn(
         old_dentry: Arc<Mutex<DirEntry>>,
@@ -108,6 +109,7 @@ impl InodeOps {
             lookup: |_, _| Err("Not support"),
             create: |_, _, _| Err("Not support"),
             mkdir: |_, _, _| Err("Not support"),
+            rmdir: |_, _| Err("Not support"),
             link: |_, _, _| Err("Not support"),
             unlink: |_, _| Err("Not support"),
             get_attr: |_| Err("Not support"),

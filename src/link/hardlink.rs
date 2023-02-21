@@ -3,7 +3,7 @@ use crate::info::ProcessFs;
 use crate::inode::InodeMode;
 use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult};
 use alloc::sync::Arc;
-use log::{info};
+use log::info;
 use spin::Mutex;
 /// decrease the hard link count of a file
 /// * name: the path of the file
@@ -35,6 +35,7 @@ pub fn vfs_unlink<T: ProcessFs>(name: &str) -> StrResult<()> {
     // 调用函数删除文件
     let unlink = inode.lock().inode_ops.unlink;
     unlink(inode.clone(), sub_dentry)?;
+
     dentry.lock().remove_child(&last);
 
     Ok(())

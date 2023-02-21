@@ -80,7 +80,7 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     }
     let mut lookup_data = lookup_data.unwrap();
     if lookup_data.path_type != PathType::PATH_NORMAL {
-        return Err("It is not dir");
+        return Err("It is not normal dir");
     }
     info!("find child dir");
     // 搜索子目录

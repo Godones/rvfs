@@ -1,4 +1,7 @@
-use rvfs::{init_vfs, vfs_link, vfs_mkdir, vfs_open_file, vfs_readdir, vfs_symlink, FakeFSC, FileFlags, FileMode, vfs_readlink};
+use rvfs::{
+    init_vfs, vfs_link, vfs_mkdir, vfs_open_file, vfs_readdir, vfs_readlink, vfs_symlink,
+    vfs_unlink, vfs_write_file, FakeFSC, FileFlags, FileMode,
+};
 
 fn main() {
     env_logger::init();
@@ -19,9 +22,13 @@ fn main() {
     println!("file: {:#?}", file);
     vfs_link::<FakeFSC>("/tmp/f1", "/tmp/f2").unwrap();
     println!("link ok ......");
-    let file =
-        vfs_open_file::<FakeFSC>("/tmp/f2", FileFlags::O_RDWR, FileMode::FMODE_READ).unwrap();
-    println!("file: {:#?}", file);
+    let file_f2 = vfs_open_file::<FakeFSC>(
+        "/tmp/f2",
+        FileFlags::O_RDWR,
+        FileMode::FMODE_READ | FileMode::FMODE_WRITE,
+    )
+    .unwrap();
+    println!("file: {:#?}", file_f2);
 
     vfs_symlink::<FakeFSC>("/tmp", "/tmp/f3").unwrap();
     println!("symlink ok ......");
@@ -32,13 +39,32 @@ fn main() {
     println!("--------------------------------------");
     let items = vfs_readdir(file0).unwrap();
     println!("items: {:?}", items);
-    for name in items.into_iter(){
+    for name in items.into_iter() {
         println!("name: {}", name);
     }
 
     let mut buf = [0u8; 10];
-    let size = vfs_readlink::<FakeFSC>("/tmp/f3",buf.as_mut()).unwrap();
+    let size = vfs_readlink::<FakeFSC>("/tmp/f3", buf.as_mut()).unwrap();
     let target = std::str::from_utf8(&buf[0..size]).unwrap();
     println!("target: {}", target);
 
+    println!(
+        "/tmp/f1 hard_links: {:#?}",
+        file_f2.lock().f_dentry.lock().d_inode.lock().hard_links
+    );
+    vfs_unlink::<FakeFSC>("/tmp/f1").unwrap();
+    println!(
+        "/tmp/f1 hard_links: {:#?}",
+        file_f2.lock().f_dentry.lock().d_inode.lock().hard_links
+    );
+    vfs_unlink::<FakeFSC>("/tmp/f2").unwrap();
+    println!(
+        "/tmp/f1 hard_links: {:#?}",
+        file_f2.lock().f_dentry.lock().d_inode.lock().hard_links
+    );
+    vfs_write_file::<FakeFSC>(file_f2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].as_ref(), 0)
+        .is_err()
+        .then(|| {
+            println!("write file error");
+        });
 }

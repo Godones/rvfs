@@ -18,7 +18,7 @@ bitflags! {
         const MNT_NOSUID = 0x2;
         const MNT_NO_DEV = 0x4 ;
         const MNT_NO_EXEC = 0x8;
-        const MNT_INTERNAL = 0xf;
+        const MNT_INTERNAL = 0x10;
     }
 }
 /// 挂载点描述符
@@ -317,4 +317,12 @@ pub fn do_unmount(mount: Arc<Mutex<VfsMount>>, _flags: MountFlags) -> StrResult<
     // 从全局挂载点链表中删除
     global_mount_lock.retain(|x| !Arc::ptr_eq(x, &mount));
     Ok(())
+}
+
+pub fn mnt_want_write(mnt: &Arc<Mutex<VfsMount>>) -> bool {
+    let mnt = mnt.lock();
+    if mnt.flag.contains(MountFlags::MNT_READ_ONLY) {
+        return false;
+    }
+    true
 }

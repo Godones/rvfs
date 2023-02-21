@@ -1,7 +1,10 @@
 mod define;
 
 use crate::info::ProcessFs;
-use crate::{iinfo, wwarn, Inode, InodeMode, StrResult, VfsMount, GLOBAL_HASH_MOUNT};
+use crate::{
+    iinfo, mnt_want_write, wwarn, Inode, InodeFlags, InodeMode, StrResult, VfsMount,
+    GLOBAL_HASH_MOUNT,
+};
 use alloc::string::ToString;
 use alloc::sync::Arc;
 pub use define::*;
@@ -416,8 +419,94 @@ pub fn vfs_rename<T: ProcessFs>(_old_name: &str, _new_name: &str) -> StrResult<(
     unimplemented!()
 }
 
-pub fn vfs_rmdir<T: ProcessFs>(_dir_name: &str) -> StrResult<()> {
-    unimplemented!()
+/// delete a directory
+/// * `dir_name` - directory name
+pub fn vfs_rmdir<T: ProcessFs>(dir_name: &str) -> StrResult<()> {
+    wwarn!("vfs_rmdir");
+    // find dir
+    let lookup_data = path_walk::<T>(dir_name, LookUpFlags::DIRECTORY)?;
+    match lookup_data.path_type {
+        PathType::PATH_DOT => return Err("invalid path"),
+        PathType::PATH_DOTDOT => return Err("not empty"),
+        PathType::PATH_ROOT => return Err("it is root"),
+        _ => {}
+    }
+
+    if !mnt_want_write(&lookup_data.mnt) {
+        return Err("read only file system");
+    }
+    info!("mnt is writable");
+    let dentry = lookup_data.dentry;
+    let parent = dentry.lock().parent.upgrade().unwrap().clone();
+    let parent_inode = parent.lock().d_inode.clone();
+    may_delete(parent_inode.clone(), dentry.clone(), true)?;
+    let rmdir = parent_inode.lock().inode_ops.rmdir;
+    // remove from parent dentry
+    let name = dentry.lock().d_name.clone();
+    parent.lock().remove_child(name.as_str());
+    // set inode with del flag
+    dentry.lock().d_inode.lock().flags = InodeFlags::S_DEL;
+    rmdir(parent_inode, dentry)?;
+    wwarn!("vfs_rmdir end");
+    Ok(())
+}
+
+/*
+ *	Check whether we can remove a link victim from directory dir, check
+ *  whether the type of victim is right.
+ *  1. We can't do it if dir is read-only (done in permission())
+ *  2. We should have write and exec permissions on dir
+ *  3. We can't remove anything from append-only dir
+ *  4. We can't do anything with immutable dir (done in permission())
+ *  5. If the sticky bit on dir is set we should either
+ *	a. be owner of dir, or
+ *	b. be owner of victim, or
+ *	c. have CAP_FOWNER capability
+ *  6. If the victim is append-only or immutable we can't do antyhing with
+ *     links pointing to it.
+ *  7. If we were asked to remove a directory and victim isn't one - ENOTDIR.
+ *  8. If we were asked to remove a non-directory and victim isn't one - EISDIR.
+ *  9. We can't remove a root or mountpoint.
+ * 10. We don't allow removal of NFS sillyrenamed files; it's handled by
+ *     nfs_async_unlink().
+ */
+pub fn may_delete(
+    dir: Arc<Mutex<Inode>>,
+    dentry: Arc<Mutex<DirEntry>>,
+    isdir: bool,
+) -> StrResult<()> {
+    wwarn!("may_delete");
+    let mode = dir.lock().mode;
+    if mode != InodeMode::S_DIR {
+        return Err("not a directory");
+    }
+    if isdir {
+        if dentry.lock().d_inode.lock().mode != InodeMode::S_DIR {
+            return Err("not a directory");
+        }
+        // root
+        let parent = dentry.lock().parent.upgrade().unwrap();
+        if Arc::ptr_eq(&parent, &dentry) {
+            return Err("can't remove root directory");
+        }
+        // mount point
+        let mount = dentry.lock().mount_count;
+        if mount > 0 {
+            return Err("can't remove mount point");
+        }
+        // ensure dir is empty
+        let inode = dentry.lock().d_inode.clone();
+        let dir_size = inode.lock().file_size;
+        if dir_size > 0 {
+            return Err("directory not empty");
+        }
+    } else {
+        if dentry.lock().d_inode.lock().mode == InodeMode::S_DIR {
+            return Err("is a directory");
+        }
+    }
+    wwarn!("may_delete end");
+    Ok(())
 }
 
 fn rename_parse(

@@ -16,6 +16,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
+use kmpsearch::Haystack;
 use lazy_static::lazy_static;
 
 use spin::Mutex;
@@ -44,6 +45,7 @@ const TMPFS_DIR_INODE_OPS: InodeOps = {
     ops.link = tmpfs_link;
     ops.unlink = tmpfs_unlink;
     ops.symlink = tmpfs_symlink;
+    ops.rmdir = tmpfs_rmdir;
     ops
 };
 
@@ -231,4 +233,32 @@ fn tmpfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
     let dir_context = DirContext::new(data);
     wwarn!("rootfs_readdir end");
     Ok(dir_context)
+}
+
+fn tmpfs_rmdir(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
+    wwarn!("rootfs_rmdir");
+    let inode = dir.lock();
+    let number = inode.number;
+    let mut bind = TMP_FS.lock();
+    let ram_inode = bind.get_mut(&number).unwrap();
+    // check if the dir is empty
+    assert!(!ram_inode.data.is_empty());
+    // delete the sub dir
+    // find name from data
+    let name = dentry.lock().d_name.clone();
+    let index = ram_inode
+        .data
+        .as_slice()
+        .last_indexof_needle(name.as_bytes())
+        .unwrap();
+    ram_inode
+        .data
+        .splice(index..index + name.len() + 1, "".as_bytes().iter().cloned());
+    let sub_dir = dentry.lock().d_inode.clone();
+    let sub_dir = sub_dir.lock();
+    let sub_number = sub_dir.number;
+    // delete the sub dir
+    bind.remove(&sub_number);
+    wwarn!("rootfs_rmdir end");
+    Ok(())
 }
