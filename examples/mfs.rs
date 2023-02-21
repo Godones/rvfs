@@ -1,8 +1,8 @@
 use rvfs::ramfs::tmpfs::tmp_fs_type;
 use rvfs::{
-    do_mount, init_vfs, path_walk, register_filesystem, vfs_link, vfs_mkdir, vfs_open_file,
-    vfs_read_file, vfs_stat, vfs_symlink, vfs_unlink, vfs_write_file, FakeFSC, FileFlags, FileMode,
-    LookUpFlags, MountFlags,
+    do_mount, init_vfs, path_walk, register_filesystem, vfs_getattr, vfs_link, vfs_mkdir,
+    vfs_open_file, vfs_read_file, vfs_symlink, vfs_unlink, vfs_write_file, FakeFSC, FileFlags,
+    FileMode, LookUpFlags, MountFlags,
 };
 
 fn main() {
@@ -85,21 +85,21 @@ fn main() {
     let f1_lookup = path_walk::<FakeFSC>("/f1", LookUpFlags::READ_LINK).unwrap();
     assert_eq!(f1_lookup.dentry.lock().d_inode.lock().hard_links, 1);
 
-    let file_attr = vfs_stat::<FakeFSC>("/f1").unwrap();
+    let file_attr = vfs_getattr::<FakeFSC>("/f1").unwrap();
     println!("file_attr: {:#?}", file_attr);
 
-    let dir_attr = vfs_stat::<FakeFSC>("/").unwrap();
+    let dir_attr = vfs_getattr::<FakeFSC>("/").unwrap();
     println!("dir_attr: {:#?}", dir_attr);
 
     println!("-----------------------------------------");
     vfs_symlink::<FakeFSC>("/", "/s1").unwrap();
     println!("vfs_symlink ok ......");
 
-    let file_attr = vfs_stat::<FakeFSC>("/s1").unwrap();
+    let file_attr = vfs_getattr::<FakeFSC>("/s1").unwrap();
     println!("file_attr: {:#?}", file_attr);
 
     vfs_symlink::<FakeFSC>("/tmp/tt1", "/s2").unwrap();
     println!("vfs_symlink ok ......");
-    let file_attr = vfs_stat::<FakeFSC>("/s2").unwrap();
+    let file_attr = vfs_getattr::<FakeFSC>("/s2").unwrap();
     println!("file_attr: {:#?}", file_attr);
 }

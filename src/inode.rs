@@ -8,7 +8,7 @@ use alloc::sync::Weak;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 
-use crate::stat::FileAttribute;
+
 use spin::Mutex;
 
 bitflags! {
@@ -90,8 +90,10 @@ pub struct InodeOps {
     /// 在某个目录下，删除一个硬链接
     pub unlink: fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()>,
 
-    pub get_attr: fn(dentry: Arc<Mutex<DirEntry>>) -> StrResult<FileAttribute>,
-
+    pub get_attr: fn(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &mut [u8]) -> StrResult<usize>,
+    pub set_attr: fn(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &[u8]) -> StrResult<()>,
+    pub remove_attr: fn(dentry: Arc<Mutex<DirEntry>>, key: &str) -> StrResult<()>,
+    pub list_attr: fn(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize>,
     pub symlink:
         fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str) -> StrResult<()>,
 }
@@ -112,7 +114,10 @@ impl InodeOps {
             rmdir: |_, _| Err("Not support"),
             link: |_, _, _| Err("Not support"),
             unlink: |_, _| Err("Not support"),
-            get_attr: |_| Err("Not support"),
+            get_attr: |_, _, _| Err("Not support"),
+            set_attr: |_, _, _| Err("Not support"),
+            remove_attr: |_,_|Err("Not support"),
+            list_attr: |_,_|Err("Not support"),
             symlink: |_, _, _| Err("Not support"),
         }
     }
@@ -121,7 +126,11 @@ impl InodeOps {
 pub fn simple_statfs(sb_blk: Arc<Mutex<SuperBlock>>) -> StrResult<StatFs> {
     let stat = StatFs {
         fs_type: sb_blk.lock().magic,
-        block_size: sb_blk.lock().block_size,
+        block_size: sb_blk.lock().block_size as u64,
+        total_blocks: 0,
+        free_blocks: 0,
+        total_inodes: 0,
+        name_len: 0,
         name: sb_blk.lock().blk_dev_name.to_string(),
     };
     Ok(stat)

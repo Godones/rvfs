@@ -36,3 +36,13 @@ pub trait ProcessFs {
     fn update_link_data();
     fn max_link_count() -> u32;
 }
+
+#[derive(Default,Debug,Clone)]
+pub struct VfsTime {
+    pub year: u32,
+    pub month: u8,
+    pub day: u8,
+    pub hour: u8,
+    pub minute: u8,
+    pub second: u8,
+}

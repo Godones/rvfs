@@ -48,3 +48,5 @@
 [序 - Linux x86_64系统调用简介 (evian-zhang.github.io)](https://evian-zhang.github.io/introduction-to-linux-x86_64-syscall/index.html)
 
 [Linux VFS机制简析（一） - 舰队 - 博客园 (cnblogs.com)](https://www.cnblogs.com/jimbo17/p/10107318.html)
+
+[Overview of the Linux Virtual File System — The Linux Kernel documentation](https://www.kernel.org/doc/html/next/filesystems/vfs.html)

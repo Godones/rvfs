@@ -509,6 +509,11 @@ pub fn may_delete(
     Ok(())
 }
 
+pub fn vfs_truncate<T: ProcessFs>(_file_name: &str, _len: usize) -> StrResult<()> {
+    wwarn!("vfs_truncate");
+    wwarn!("vfs_truncate end");
+    Ok(())
+}
 fn rename_parse(
     _old_name: &str,
     _new_name: &str,

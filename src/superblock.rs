@@ -138,9 +138,14 @@ impl SuperBlockOps {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct StatFs {
     pub fs_type: u32,
-    pub block_size: u32,
+    pub block_size: u64,
+    pub total_blocks: u64,
+    pub free_blocks: u64,
+    pub total_inodes: u64,
+    pub name_len: u32,
     pub name: String,
 }
 
@@ -175,7 +180,6 @@ impl FileSystemType {
 bitflags! {
     pub struct FileSystemAttr:u32{
         const FS_REQUIRES_DEV = 0x00000001;
-
     }
 }
 
