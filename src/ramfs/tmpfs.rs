@@ -61,6 +61,7 @@ const TMPFS_FILE_INODE_OPS: InodeOps = {
     ops.set_attr = tmpfs_set_attr;
     ops.remove_attr = tmpfs_remove_attr;
     ops.list_attr = tmpfs_list_attr;
+    ops.truncate = tmpfs_truncate;
     ops
 };
 
@@ -318,4 +319,16 @@ fn tmpfs_list_attr(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<us
     let min_len = min(len, buf.len());
     buf[..min_len].copy_from_slice(&attr_list.as_bytes()[..min_len]);
     Ok(min_len)
+}
+fn tmpfs_truncate(inode: Arc<Mutex<Inode>>) -> StrResult<()> {
+    let number = inode.lock().number;
+    let mut bind = TMP_FS.lock();
+    let ram_inode = bind.get_mut(&number).unwrap();
+    let new_size = inode.lock().file_size;
+    if new_size > ram_inode.data.len() {
+        ram_inode.data.resize(new_size, 0);
+    } else {
+        ram_inode.data.truncate(new_size);
+    }
+    Ok(())
 }

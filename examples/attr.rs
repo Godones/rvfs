@@ -1,6 +1,6 @@
 use rvfs::{
-    init_vfs, vfs_getxattr, vfs_listxattr, vfs_mkdir, vfs_removexattr, vfs_setxattr, FakeFSC,
-    FileMode,
+    init_vfs, vfs_getattr, vfs_getxattr, vfs_listxattr, vfs_mkdir, vfs_open_file, vfs_removexattr,
+    vfs_setxattr, vfs_truncate, FakeFSC, FileFlags, FileMode,
 };
 
 fn main() {
@@ -24,7 +24,7 @@ fn main() {
         });
     vfs_removexattr::<FakeFSC>("/tmp", "type").unwrap();
     let mut buf = [0u8; 20];
-    let len = vfs_listxattr::<FakeFSC>("/tmp", &mut buf).unwrap();
+    let _len = vfs_listxattr::<FakeFSC>("/tmp", &mut buf).unwrap();
 
     buf.split(|&x| x == 0)
         .collect::<Vec<&[u8]>>()
@@ -39,4 +39,19 @@ fn main() {
     let len = vfs_getxattr::<FakeFSC>("/tmp", "target", &mut buf).unwrap();
     let str = std::str::from_utf8(&buf[0..len]).unwrap();
     println!("target: {}", str);
+
+    vfs_truncate::<FakeFSC>("/tmp", 10).is_err().then(|| {
+        println!("truncate failed");
+    });
+    vfs_open_file::<FakeFSC>(
+        "/tmp/f1",
+        FileFlags::O_CREAT | FileFlags::O_RDWR,
+        FileMode::FMODE_WRITE,
+    )
+    .unwrap();
+    vfs_truncate::<FakeFSC>("/tmp/f1", 10).is_ok().then(|| {
+        println!("truncate success");
+    });
+    let attr = vfs_getattr::<FakeFSC>("/tmp/f1").unwrap();
+    println!("attr: {:#?}", attr);
 }

@@ -84,6 +84,7 @@ impl DirEntry {
 unsafe impl Send for DirEntry {}
 unsafe impl Sync for DirEntry {}
 
+#[derive(Clone)]
 pub struct DirEntryOps {
     pub d_hash: fn(dentry: Arc<Mutex<DirEntry>>, name: &str) -> usize,
     pub d_compare: fn(dentry: Arc<Mutex<DirEntry>>, name1: &str, name2: &str) -> bool,
@@ -212,5 +213,12 @@ impl LookUpData {
     }
     pub fn dec_nested_count(&mut self) {
         self.nested_count -= 1;
+    }
+}
+
+bitflags! {
+    pub struct RenameFlag:u32{
+        const RENAME_EXCHANGE = 0x1;
+        const RENAME_NOREPLACE = 0x2;
     }
 }

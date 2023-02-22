@@ -14,6 +14,7 @@ bitflags! {
     pub struct InodeFlags:u32{
         const S_DEL = 0x1;
         const S_CACHE = 0x2;
+        const S_EMPTY = 0x4;
     }
     pub struct InodeMode:u32{
         const S_SYMLINK = 0x1;
@@ -63,6 +64,9 @@ impl Inode {
             blk_size: 0,
         }
     }
+    pub fn is_valid(&self) -> bool {
+        self.flags == InodeFlags::S_EMPTY
+    }
 }
 
 pub struct InodeOps {
@@ -88,13 +92,21 @@ pub struct InodeOps {
     ) -> StrResult<()>,
     /// 在某个目录下，删除一个硬链接
     pub unlink: fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()>,
-
+    /// 修改索引节点 inode 所指文件的长度。在调用该方法之前，必须将
+    /// inode 对象的 i_size 域设置为需要的新长度值
+    pub truncate: fn(inode: Arc<Mutex<Inode>>) -> StrResult<()>,
     pub get_attr: fn(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &mut [u8]) -> StrResult<usize>,
     pub set_attr: fn(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &[u8]) -> StrResult<()>,
     pub remove_attr: fn(dentry: Arc<Mutex<DirEntry>>, key: &str) -> StrResult<()>,
     pub list_attr: fn(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize>,
     pub symlink:
         fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str) -> StrResult<()>,
+    pub rename: fn(
+        old_dir: Arc<Mutex<Inode>>,
+        old_dentry: Arc<Mutex<DirEntry>>,
+        new_dir: Arc<Mutex<Inode>>,
+        new_dentry: Arc<Mutex<DirEntry>>,
+    ) -> StrResult<()>,
 }
 impl Debug for InodeOps {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
@@ -113,11 +125,13 @@ impl InodeOps {
             rmdir: |_, _| Err("Not support"),
             link: |_, _, _| Err("Not support"),
             unlink: |_, _| Err("Not support"),
+            truncate: |_| Err("Not support"),
             get_attr: |_, _, _| Err("Not support"),
             set_attr: |_, _, _| Err("Not support"),
             remove_attr: |_, _| Err("Not support"),
             list_attr: |_, _| Err("Not support"),
             symlink: |_, _, _| Err("Not support"),
+            rename: |_, _, _, _| Err("Not support"),
         }
     }
 }

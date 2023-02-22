@@ -63,6 +63,7 @@ const ROOTFS_FILE_INODE_OPS: InodeOps = {
     ops.set_attr = rootfs_set_attr;
     ops.remove_attr = rootfs_remove_attr;
     ops.list_attr = rootfs_list_attr;
+    ops.truncate = rootfs_truncate;
     ops
 };
 
@@ -323,4 +324,17 @@ fn rootfs_list_attr(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<u
     let min_len = min(len, buf.len());
     buf[..min_len].copy_from_slice(&attr_list.as_bytes()[..min_len]);
     Ok(min_len)
+}
+
+fn rootfs_truncate(inode: Arc<Mutex<Inode>>) -> StrResult<()> {
+    let number = inode.lock().number;
+    let mut bind = ROOT_FS.lock();
+    let ram_inode = bind.get_mut(&number).unwrap();
+    let new_size = inode.lock().file_size;
+    if new_size > ram_inode.data.len() {
+        ram_inode.data.resize(new_size, 0);
+    } else {
+        ram_inode.data.truncate(new_size);
+    }
+    Ok(())
 }

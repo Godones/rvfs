@@ -8,7 +8,7 @@ use crate::{
 use alloc::string::ToString;
 use alloc::sync::Arc;
 pub use define::*;
-use log::info;
+use log::{error, info};
 use spin::Mutex;
 
 /// 当删除物理文件时，释放缓存描述符的引用并将其从哈希表中删除
@@ -414,11 +414,6 @@ fn get_next_path_component(dir_name: &str) -> (&str, &str) {
     (next_path, component)
 }
 
-pub fn vfs_rename<T: ProcessFs>(_old_name: &str, _new_name: &str) -> StrResult<()> {
-    // parse name and get dentry
-    unimplemented!()
-}
-
 /// delete a directory
 /// * `dir_name` - directory name
 pub fn vfs_rmdir<T: ProcessFs>(dir_name: &str) -> StrResult<()> {
@@ -470,6 +465,7 @@ pub fn vfs_rmdir<T: ProcessFs>(dir_name: &str) -> StrResult<()> {
  * 10. We don't allow removal of NFS sillyrenamed files; it's handled by
  *     nfs_async_unlink().
  */
+/// check whether we can delete a find in dir
 pub fn may_delete(
     dir: Arc<Mutex<Inode>>,
     dentry: Arc<Mutex<DirEntry>>,
@@ -509,21 +505,193 @@ pub fn may_delete(
     Ok(())
 }
 
-pub fn vfs_truncate<T: ProcessFs>(_file_name: &str, _len: usize) -> StrResult<()> {
+pub fn may_create(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
+    wwarn!("may_create");
+    let mode = dir.lock().mode;
+    if mode != InodeMode::S_DIR {
+        return Err("not a directory");
+    }
+    // root
+    let parent = dentry.lock().parent.upgrade().unwrap();
+    if Arc::ptr_eq(&parent, &dentry) {
+        return Err("can't create root directory");
+    }
+    wwarn!("may_create end");
+    Ok(())
+}
+/// truncate a file to a specified length
+/// * `file_name` - file name
+/// * `len` - length
+pub fn vfs_truncate<T: ProcessFs>(file_name: &str, len: usize) -> StrResult<()> {
     wwarn!("vfs_truncate");
+    let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
+    let inode = lookup_data.dentry.lock().d_inode.clone();
+    if is_dir(inode.clone()) {
+        return Err("is a directory");
+    }
+    if !mnt_want_write(&lookup_data.mnt) {
+        return Err("read only file system");
+    }
+    // ignore permission
+
+    // modify the inode file_size
+    inode.lock().file_size = len;
+    let truncate = inode.lock().inode_ops.truncate;
+    truncate(inode)?;
     wwarn!("vfs_truncate end");
     Ok(())
 }
-fn rename_parse(
-    _old_name: &str,
-    _new_name: &str,
-) -> StrResult<(
-    Arc<Mutex<Inode>>,
-    Arc<Mutex<DirEntry>>,
-    Arc<Mutex<Inode>>,
-    Arc<Mutex<DirEntry>>,
-)> {
-    unimplemented!()
+
+#[inline(always)]
+pub fn is_dir(inode: Arc<Mutex<Inode>>) -> bool {
+    inode.lock().mode == InodeMode::S_DIR
+}
+
+/// rename a file
+/// * `old_name` - old file name
+/// * `new_name` - new file name
+/// * `flag` - rename flag
+/// # description
+/// 1. old_name and new_name must be in the same file system
+/// 2.
+pub fn vfs_rename<T: ProcessFs>(old_name: &str, new_name: &str) -> StrResult<()> {
+    if old_name == "/" {
+        return Err("can't rename root directory");
+    }
+    // parse name and get dentry
+    let mut old_lookup_data = path_walk::<T>(old_name, LookUpFlags::NOLAST)?;
+    let mut new_lookup_data = path_walk::<T>(new_name, LookUpFlags::NOLAST)?;
+
+    let old_mnt = &old_lookup_data.mnt;
+    let new_mnt = &new_lookup_data.mnt;
+    // check if in the same file system
+    if !Arc::ptr_eq(old_mnt, new_mnt) {
+        return Err("not in the same file system");
+    }
+    let old_dentry = old_lookup_data.dentry.clone();
+    let new_dentry = new_lookup_data.dentry.clone();
+    if old_lookup_data.path_type != PathType::PATH_NORMAL
+        || new_lookup_data.path_type != PathType::PATH_NORMAL
+    {
+        return Err("invalid path");
+    }
+
+    // find old file in parent dir
+    let last = old_lookup_data.last.clone();
+    let (_, old_sub_dentry) = find_file_indir(&mut old_lookup_data, &last)?;
+    if Arc::ptr_eq(&old_sub_dentry, &old_dentry) {
+        return Err("can't rename a file to itself");
+    }
+
+    if !is_dir(old_sub_dentry.lock().d_inode.clone()) {
+        // if the file name ends with '/', it means we want to rename a directory
+        // TODO(lookup_data should do)
+    }
+    let new_last = new_lookup_data.last.clone();
+    let res = find_file_indir(&mut new_lookup_data, &new_last);
+    let new_sub_dentry = match res {
+        Ok((_, sub_dentry)) => sub_dentry,
+        Err(_) => {
+            // a fake dentry
+            info!("make a fake dentry");
+            let mut dentry = DirEntry::empty();
+            dentry.d_name = new_lookup_data.last.clone();
+            dentry.parent = Arc::downgrade(&new_dentry);
+            dentry.d_ops = old_sub_dentry.lock().d_ops.clone();
+            Arc::new(Mutex::new(dentry))
+        }
+    };
+    error!("path walk over");
+
+    let old_inode = old_dentry.lock().d_inode.clone();
+    // the old_dentry may be equal to new_dentry
+    do_internal_rename(
+        old_inode,
+        old_sub_dentry.clone(),
+        new_dentry.lock().d_inode.clone(),
+        new_sub_dentry.clone(),
+    )?;
+    // after rename, the old dentry is invalid
+    // so we need to update the old dentry
+    let mut old_sub_dentry = old_sub_dentry.lock();
+    let new_sub_dentry = new_sub_dentry.lock();
+    old_sub_dentry.d_name = new_sub_dentry.d_name.clone();
+    old_sub_dentry.parent = new_sub_dentry.parent.clone();
+    let inode = new_sub_dentry.d_inode.clone();
+    if inode.lock().is_valid() {
+        old_sub_dentry.d_inode = inode;
+    }
+    Ok(())
+}
+
+fn do_internal_rename(
+    old_dir: Arc<Mutex<Inode>>,
+    old_dentry: Arc<Mutex<DirEntry>>,
+    new_dir: Arc<Mutex<Inode>>,
+    new_dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
+    wwarn!("do_internal_rename");
+    let is_dir = is_dir(old_dentry.lock().d_inode.clone());
+    let old_inode = old_dentry.lock().d_inode.clone();
+    let new_inode = new_dentry.lock().d_inode.clone();
+    if Arc::ptr_eq(&old_inode, &new_inode) {
+        return Err("can't rename a file to itself");
+    }
+    may_delete(old_dir.clone(), old_dentry.clone(), is_dir)?;
+
+    info!("new_dentry: {:?}", new_dentry.lock().d_name);
+    if new_dentry.lock().d_inode.lock().flags == InodeFlags::S_EMPTY {
+        // if the file doesn't exist, we need to create it
+        may_create(new_dir.clone(), new_dentry.clone())?;
+    } else {
+        may_delete(new_dir.clone(), new_dentry.clone(), is_dir)?;
+    }
+    // rename
+    if is_dir {
+        vfs_rename_dir(
+            old_dir.clone(),
+            old_dentry.clone(),
+            new_dir.clone(),
+            new_dentry.clone(),
+        )?;
+    } else {
+        vfs_rename_other(
+            old_dir.clone(),
+            old_dentry.clone(),
+            new_dir.clone(),
+            new_dentry.clone(),
+        )?;
+    }
+    wwarn!("do_internal_rename end");
+    Ok(())
+}
+
+fn vfs_rename_other(
+    old_dir: Arc<Mutex<Inode>>,
+    old_dentry: Arc<Mutex<DirEntry>>,
+    new_dir: Arc<Mutex<Inode>>,
+    new_dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
+    wwarn!("vfs_rename_other start");
+    // do somthing that i dont know
+    let rename = old_dentry.lock().d_inode.lock().inode_ops.rename;
+    rename(old_dir, old_dentry, new_dir, new_dentry)?;
+    wwarn!("vfs_rename_other end");
+    Ok(())
+}
+
+fn vfs_rename_dir(
+    old_dir: Arc<Mutex<Inode>>,
+    old_dentry: Arc<Mutex<DirEntry>>,
+    new_dir: Arc<Mutex<Inode>>,
+    new_dentry: Arc<Mutex<DirEntry>>,
+) -> StrResult<()> {
+    wwarn!("vfs_rename_dir start");
+    // do somthing that i dont know
+    let rename = old_dentry.lock().d_inode.lock().inode_ops.rename;
+    rename(old_dir, old_dentry, new_dir, new_dentry)?;
+    wwarn!("vfs_rename_dir end");
+    Ok(())
 }
 
 #[cfg(test)]
