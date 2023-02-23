@@ -7,7 +7,10 @@ use crate::ramfs::{
 };
 use crate::ramfs::{ramfs_link, ramfs_unlink, RamFsInode};
 use crate::superblock::SuperBlock;
-use crate::{wwarn, DataOps, DirContext, File, FileMode, FileOps, FileSystemAttr, FileSystemType, LookUpData, MountFlags, StrResult, InodeFlags};
+use crate::{
+    wwarn, DataOps, DirContext, File, FileMode, FileOps, FileSystemAttr, FileSystemType,
+    InodeFlags, LookUpData, MountFlags, StrResult,
+};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
@@ -16,7 +19,7 @@ use core::cmp::min;
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
-use kmpsearch::Haystack;
+
 use lazy_static::lazy_static;
 use log::{error, info};
 
@@ -252,7 +255,7 @@ fn rootfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
     let bind = ROOT_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
     let mut data = Vec::new();
-    ram_inode.dentries.keys().for_each(|x|{
+    ram_inode.dentries.keys().for_each(|x| {
         data.extend_from_slice(x.as_bytes());
         data.push(0);
     });
@@ -347,7 +350,7 @@ fn rootfs_rename(
     old_dentry: Arc<Mutex<DirEntry>>,
     new_dir: Arc<Mutex<Inode>>,
     new_dentry: Arc<Mutex<DirEntry>>,
-)->StrResult<()>{
+) -> StrResult<()> {
     wwarn!("rootfs_rename");
     let mut old_dir_lock = old_dir.lock();
     let old_dir_number = old_dir_lock.number;
@@ -355,17 +358,18 @@ fn rootfs_rename(
     let old_dir_inode = bind.get_mut(&old_dir_number).unwrap();
     let old_name = old_dentry.lock().d_name.clone();
     old_dir_inode.dentries.remove(&old_name);
-    old_dir_lock.file_size -=1;
+    old_dir_lock.file_size -= 1;
 
-
-    info!("{:?}",old_dir_inode.dentries);
+    info!("{:?}", old_dir_inode.dentries);
     drop(old_dir_lock);
     info!("update old dir over ....");
     let mut new_dir_lock = new_dir.lock();
     let new_dir_number = new_dir_lock.number;
     let new_dir_inode = bind.get_mut(&new_dir_number).unwrap();
     let new_name = new_dentry.lock().d_name.clone();
-    let is_new = new_dir_inode.dentries.insert(new_name, old_dentry.lock().d_inode.lock().number);
+    let is_new = new_dir_inode
+        .dentries
+        .insert(new_name, old_dentry.lock().d_inode.lock().number);
     if is_new.is_some() {
         info!("is new file");
         //mark the new file as invalid
@@ -374,8 +378,8 @@ fn rootfs_rename(
         new_file.flags = InodeFlags::S_INVALID;
         let new_file_number = new_file.number;
         bind.remove(&new_file_number);
-    }else {
-        new_dir_lock.file_size +=1;
+    } else {
+        new_dir_lock.file_size += 1;
     }
     wwarn!("rootfs_rename end");
     Ok(())

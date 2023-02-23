@@ -19,9 +19,6 @@ use hashbrown::HashMap;
 use log::info;
 use spin::Mutex;
 
-
-
-
 #[derive(Clone)]
 pub struct RamFsInode {
     // inode number
@@ -29,7 +26,7 @@ pub struct RamFsInode {
     // may be for normal file
     data: Vec<u8>,
     // may be for dir to store sub_file
-    dentries:HashMap<String,usize>,
+    dentries: HashMap<String, usize>,
     // type
     mode: InodeMode,
     hard_links: u32,
@@ -338,7 +335,6 @@ fn ramfs_link(
     let mut dir_lock = dir.lock();
     assert_eq!(dir_lock.mode, InodeMode::S_DIR);
 
-
     // create a new inode
     let number = dir_lock.number;
     let ram_inode = binding.get_mut(&number).unwrap();
@@ -368,7 +364,6 @@ fn ramfs_unlink(
     let ram_inode = binding.get_mut(&number).unwrap();
     ram_inode.hard_links -= 1;
 
-
     if inode_lock.hard_links == 0 {
         assert_eq!(ram_inode.hard_links, 0);
         binding.remove(&number);
@@ -376,7 +371,7 @@ fn ramfs_unlink(
 
     // delete dentry and update dir size
     let dir_number = dir_lock.number;
-    let dir_ram_inode= binding.get_mut(&dir_number).unwrap();
+    let dir_ram_inode = binding.get_mut(&dir_number).unwrap();
     dir_ram_inode.dentries.remove(&name);
     dir_lock.file_size = dir_ram_inode.dentries.len();
 
