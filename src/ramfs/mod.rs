@@ -19,16 +19,23 @@ use hashbrown::HashMap;
 use log::info;
 use spin::Mutex;
 
+
+
+
 #[derive(Clone)]
 pub struct RamFsInode {
-    // 节点号
+    // inode number
     number: usize,
+    // may be for normal file
     data: Vec<u8>,
-    // 类型
+    // may be for dir to store sub_file
+    dentries:HashMap<String,usize>,
+    // type
     mode: InodeMode,
     hard_links: u32,
-    // 读写权限
+    // write/read mod
     attr: FileMode,
+    // extra attribute
     ex_attr: HashMap<String, Vec<u8>>,
 }
 
@@ -38,6 +45,7 @@ impl RamFsInode {
         Self {
             number,
             data: Vec::new(),
+            dentries: HashMap::new(),
             mode,
             hard_links: h_link,
             attr,
@@ -191,12 +199,12 @@ fn ramfs_create_inode(
     drop(inode_lock);
     // 在父目录中写入目录项
     let mut dir_lock = dir.lock();
-    let number = dir_lock.number;
+    let dir_number = dir_lock.number;
     let mut bind = fs.lock();
-    let ram_inode = bind.get_mut(&number).unwrap();
-    ram_inode.data.extend_from_slice(name.as_bytes());
-    ram_inode.data.push(0);
-    dir_lock.file_size = ram_inode.data.len();
+    let ram_inode = bind.get_mut(&dir_number).unwrap();
+    let old = ram_inode.dentries.insert(name, number);
+    assert!(old.is_none());
+    dir_lock.file_size = ram_inode.dentries.len();
     drop(dir_lock);
     wwarn!("ramfs_create_inode end");
     Ok(inode)
@@ -289,10 +297,12 @@ fn ramfs_write_file(
     buf: &[u8],
     offset: u64,
 ) -> StrResult<usize> {
+    wwarn!("ramfs_write_file");
     let dentry = &mut file.lock().f_dentry;
     let inode = &mut dentry.lock().d_inode;
     // 获取inode的编号
     let number = inode.lock().number;
+    info!("number: {}", number);
     let mut binding = fs.lock();
     let ram_inode = binding.get_mut(&number).unwrap();
     if offset as usize + buf.len() > ram_inode.data.len() {
@@ -325,14 +335,16 @@ fn ramfs_link(
 
     drop(old_inode_lock);
     new_dentry.lock().d_inode = old_inode;
-    let dir_lock = dir.lock();
+    let mut dir_lock = dir.lock();
     assert_eq!(dir_lock.mode, InodeMode::S_DIR);
+
+
+    // create a new inode
     let number = dir_lock.number;
     let ram_inode = binding.get_mut(&number).unwrap();
     let name = new_dentry.lock().d_name.clone();
-    ram_inode.data.extend_from_slice(name.as_bytes());
-    ram_inode.data.push(0);
-    // TODO dir目录下需要增加一个(磁盘)目录项
+    ram_inode.dentries.insert(name, inode_number);
+    dir_lock.file_size = ram_inode.dentries.len();
     wwarn!("ramfs_link end");
     Ok(())
 }
@@ -343,10 +355,10 @@ fn ramfs_unlink(
     dentry: Arc<Mutex<DirEntry>>,
 ) -> StrResult<()> {
     wwarn!("ramfs_unlink");
-    let dir_lock = dir.lock();
+    let mut dir_lock = dir.lock();
     assert_eq!(dir_lock.mode, InodeMode::S_DIR);
-    let _name = dentry.lock().d_name.clone();
-    // TODO dir目录下需要删除一个(磁盘)目录项
+    let name = dentry.lock().d_name.clone();
+
     let inode = dentry.lock().d_inode.clone();
     let mut inode_lock = inode.lock();
     inode_lock.hard_links -= 1;
@@ -355,10 +367,19 @@ fn ramfs_unlink(
     let mut binding = fs.lock();
     let ram_inode = binding.get_mut(&number).unwrap();
     ram_inode.hard_links -= 1;
+
+
     if inode_lock.hard_links == 0 {
         assert_eq!(ram_inode.hard_links, 0);
         binding.remove(&number);
     }
+
+    // delete dentry and update dir size
+    let dir_number = dir_lock.number;
+    let dir_ram_inode= binding.get_mut(&dir_number).unwrap();
+    dir_ram_inode.dentries.remove(&name);
+    dir_lock.file_size = dir_ram_inode.dentries.len();
+
     wwarn!("ramfs_unlink end");
     Ok(())
 }

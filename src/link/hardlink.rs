@@ -1,9 +1,9 @@
 use crate::dentry::DirEntry;
 use crate::info::ProcessFs;
 use crate::inode::InodeMode;
-use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult};
+use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult, InodeFlags};
 use alloc::sync::Arc;
-use log::info;
+use log::{error, info};
 use spin::Mutex;
 /// decrease the hard link count of a file
 /// * name: the path of the file
@@ -34,7 +34,10 @@ pub fn vfs_unlink<T: ProcessFs>(name: &str) -> StrResult<()> {
     }
     // 调用函数删除文件
     let unlink = inode.lock().inode_ops.unlink;
-    unlink(inode.clone(), sub_dentry)?;
+    unlink(inode.clone(), sub_dentry.clone())?;
+
+    // mark the inode as deleted
+    sub_dentry.lock().d_inode.lock().flags = InodeFlags::S_INVALID;
 
     dentry.lock().remove_child(&last);
 

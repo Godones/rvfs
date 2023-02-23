@@ -67,8 +67,13 @@ pub fn vfs_write_file<T: ProcessFs>(
     if !mode.contains(FileMode::FMODE_WRITE) {
         return Err("file not open for writing");
     }
-    drop(file_lock);
+    // check whether file is valid
+    let inode = file_lock.f_dentry.lock().d_inode.clone();
+    if inode.lock().is_valid() {
+        return Err("file is invalid");
+    }
 
+    drop(file_lock);
     write(file.clone(), buf, offset)
 }
 

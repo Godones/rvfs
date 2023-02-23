@@ -14,7 +14,7 @@ bitflags! {
     pub struct InodeFlags:u32{
         const S_DEL = 0x1;
         const S_CACHE = 0x2;
-        const S_EMPTY = 0x4;
+        const S_INVALID = 0x4;
     }
     pub struct InodeMode:u32{
         const S_SYMLINK = 0x1;
@@ -65,7 +65,7 @@ impl Inode {
         }
     }
     pub fn is_valid(&self) -> bool {
-        self.flags == InodeFlags::S_EMPTY
+        self.flags == InodeFlags::S_INVALID
     }
 }
 

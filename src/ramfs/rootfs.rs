@@ -7,10 +7,7 @@ use crate::ramfs::{
 };
 use crate::ramfs::{ramfs_link, ramfs_unlink, RamFsInode};
 use crate::superblock::SuperBlock;
-use crate::{
-    wwarn, DataOps, DirContext, File, FileMode, FileOps, FileSystemAttr, FileSystemType,
-    LookUpData, MountFlags, StrResult,
-};
+use crate::{wwarn, DataOps, DirContext, File, FileMode, FileOps, FileSystemAttr, FileSystemType, LookUpData, MountFlags, StrResult, InodeFlags};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
@@ -21,7 +18,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
 use kmpsearch::Haystack;
 use lazy_static::lazy_static;
-use log::error;
+use log::{error, info};
 
 use spin::Mutex;
 
@@ -54,6 +51,7 @@ const ROOTFS_DIR_INODE_OPS: InodeOps = {
     ops.set_attr = rootfs_set_attr;
     ops.remove_attr = rootfs_remove_attr;
     ops.list_attr = rootfs_list_attr;
+    ops.rename = rootfs_rename;
     ops
 };
 
@@ -171,11 +169,15 @@ fn rootfs_create(
 
 fn rootfs_read_file(file: Arc<Mutex<File>>, buf: &mut [u8], offset: u64) -> StrResult<usize> {
     wwarn!("rootfs_read_file");
-    ramfs_read_file(ROOT_FS.clone(), file, buf, offset)
+    let len = ramfs_read_file(ROOT_FS.clone(), file, buf, offset)?;
+    wwarn!("rootfs_read_file end");
+    Ok(len)
 }
 fn rootfs_write_file(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResult<usize> {
     wwarn!("rootfs_write_file");
-    ramfs_write_file(ROOT_FS.clone(), file, buf, offset)
+    let len = ramfs_write_file(ROOT_FS.clone(), file, buf, offset)?;
+    wwarn!("rootfs_write_file end");
+    Ok(len)
 }
 
 /// create a hard link to the inode
@@ -249,7 +251,11 @@ fn rootfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
     let number = inode.number;
     let bind = ROOT_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
-    let data = ram_inode.data.clone();
+    let mut data = Vec::new();
+    ram_inode.dentries.keys().for_each(|x|{
+        data.extend_from_slice(x.as_bytes());
+        data.push(0);
+    });
     let dir_context = DirContext::new(data);
     wwarn!("rootfs_readdir end");
     Ok(dir_context)
@@ -257,26 +263,23 @@ fn rootfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
 
 fn rootfs_rmdir(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
     wwarn!("rootfs_rmdir");
-    let inode = dir.lock();
+    let mut inode = dir.lock();
     let number = inode.number;
     let mut bind = ROOT_FS.lock();
     let ram_inode = bind.get_mut(&number).unwrap();
     // check if the dir is empty
-    assert!(!ram_inode.data.is_empty());
+    assert!(!ram_inode.dentries.is_empty());
     // delete the sub dir
     // find name from data
     let name = dentry.lock().d_name.clone();
-    let index = ram_inode
-        .data
-        .as_slice()
-        .last_indexof_needle(name.as_bytes())
-        .unwrap();
-    ram_inode
-        .data
-        .splice(index..index + name.len() + 1, "".as_bytes().iter().cloned());
+    ram_inode.dentries.remove(&name);
+
     let sub_dir = dentry.lock().d_inode.clone();
     let sub_dir = sub_dir.lock();
     let sub_number = sub_dir.number;
+
+    // update the dir size
+    inode.file_size = ram_inode.dentries.len();
     // delete the sub dir
     bind.remove(&sub_number);
     wwarn!("rootfs_rmdir end");
@@ -336,5 +339,44 @@ fn rootfs_truncate(inode: Arc<Mutex<Inode>>) -> StrResult<()> {
     } else {
         ram_inode.data.truncate(new_size);
     }
+    Ok(())
+}
+
+fn rootfs_rename(
+    old_dir: Arc<Mutex<Inode>>,
+    old_dentry: Arc<Mutex<DirEntry>>,
+    new_dir: Arc<Mutex<Inode>>,
+    new_dentry: Arc<Mutex<DirEntry>>,
+)->StrResult<()>{
+    wwarn!("rootfs_rename");
+    let mut old_dir_lock = old_dir.lock();
+    let old_dir_number = old_dir_lock.number;
+    let mut bind = ROOT_FS.lock();
+    let old_dir_inode = bind.get_mut(&old_dir_number).unwrap();
+    let old_name = old_dentry.lock().d_name.clone();
+    old_dir_inode.dentries.remove(&old_name);
+    old_dir_lock.file_size -=1;
+
+
+    info!("{:?}",old_dir_inode.dentries);
+    drop(old_dir_lock);
+    info!("update old dir over ....");
+    let mut new_dir_lock = new_dir.lock();
+    let new_dir_number = new_dir_lock.number;
+    let new_dir_inode = bind.get_mut(&new_dir_number).unwrap();
+    let new_name = new_dentry.lock().d_name.clone();
+    let is_new = new_dir_inode.dentries.insert(new_name, old_dentry.lock().d_inode.lock().number);
+    if is_new.is_some() {
+        info!("is new file");
+        //mark the new file as invalid
+        let new_file = new_dentry.lock().d_inode.clone();
+        let mut new_file = new_file.lock();
+        new_file.flags = InodeFlags::S_INVALID;
+        let new_file_number = new_file.number;
+        bind.remove(&new_file_number);
+    }else {
+        new_dir_lock.file_size +=1;
+    }
+    wwarn!("rootfs_rename end");
     Ok(())
 }
