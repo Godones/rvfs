@@ -22,5 +22,13 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
-    - name: Run examples
+    - name: Run examples link
       run: RUST_LOG=info  cargo run --example link
+    - name: Run examples attr
+      run: RUST_LOG=info  cargo run --example attr
+    - name: Run examples rename
+      run: RUST_LOG=info  cargo run --example rename
+    - name: Run examples delete
+      run: RUST_LOG=info  cargo run --example delete
+    - name: Run examples mfs
+      run: RUST_LOG=info  cargo run --example mfs

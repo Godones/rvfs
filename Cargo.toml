@@ -16,5 +16,5 @@ kmpsearch = "1.0.0"
 
 [dev-dependencies]
 env_logger = "0.10.0"
-dbfs2 = {path = "../dbfs2"}
-jammdb = {git = "https://github.com/Godones/jammdb.git"}
+#dbfs2 = {path = "../dbfs2"}
+#jammdb = {git = "https://github.com/Godones/jammdb.git"}
