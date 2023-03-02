@@ -9,7 +9,7 @@ use crate::ramfs::{ramfs_link, ramfs_unlink, RamFsInode};
 use crate::superblock::SuperBlock;
 use crate::{
     wwarn, DataOps, DirContext, File, FileMode, FileOps, FileSystemAttr, FileSystemType,
-    LookUpData, MountFlags, StrResult,
+    FileSystemTypeInner, LookUpData, MountFlags, StrResult,
 };
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
@@ -34,9 +34,11 @@ pub const fn tmp_fs_type() -> FileSystemType {
     FileSystemType {
         name: "tmpfs",
         fs_flags: FileSystemAttr::empty(),
-        super_blk_s: Vec::new(),
         get_super_blk: tmpfs_get_super_blk,
         kill_super_blk: ramfs_kill_super_blk,
+        inner: Mutex::new(FileSystemTypeInner {
+            super_blk_s: Vec::new(),
+        }),
     }
 }
 
@@ -84,10 +86,7 @@ const TMPFS_FILE_FILE_OPS: FileOps = {
     ops
 };
 
-const TMPFS_SYMLINK_FILE_OPS: FileOps = {
-    let ops = FileOps::empty();
-    ops
-};
+const TMPFS_SYMLINK_FILE_OPS: FileOps = FileOps::empty();
 
 const TMPFS_DIR_FILE_OPS: FileOps = {
     let mut ops = FileOps::empty();
@@ -96,11 +95,11 @@ const TMPFS_DIR_FILE_OPS: FileOps = {
 };
 
 fn tmpfs_get_super_blk(
-    fs_type: Arc<Mutex<FileSystemType>>,
+    fs_type: Arc<FileSystemType>,
     flags: MountFlags,
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
-) -> StrResult<Arc<Mutex<SuperBlock>>> {
+) -> StrResult<Arc<SuperBlock>> {
     wwarn!("tmpfs_get_super_blk");
     let sb_blk = ramfs_simple_super_blk(fs_type.clone(), flags, dev_name, data)?;
     assert_eq!(INODE_COUNT.load(Ordering::SeqCst), 0);
@@ -117,9 +116,9 @@ fn tmpfs_get_super_blk(
     inode.lock().hard_links -= 1;
     // 创建目录项
     let dentry = ramfs_create_root_dentry(None, inode)?;
-    sb_blk.lock().root = dentry;
+    sb_blk.update_root(dentry);
     // 将sb_blk插入到fs_type的链表中
-    fs_type.lock().insert_super_blk(sb_blk.clone());
+    fs_type.insert_super_blk(sb_blk.clone());
     wwarn!("tmpfs_get_super_blk end");
     Ok(sb_blk)
 }
@@ -233,7 +232,7 @@ fn tmpfs_follow_link(dentry: Arc<Mutex<DirEntry>>, lookup_data: &mut LookUpData)
     let number = inode.number;
     let bind = TMP_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
-    ramfs_follow_link(&ram_inode, lookup_data)
+    ramfs_follow_link(ram_inode, lookup_data)
 }
 
 /// read the contents of a directory

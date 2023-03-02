@@ -33,8 +33,8 @@ pub fn vfs_close_file<T: ProcessFs>(file: Arc<Mutex<File>>) -> StrResult<()> {
     let flush = file.lock().f_ops.flush;
     flush(file.clone())?;
     let t_file = file.lock();
-    let sb = t_file.f_mnt.lock();
-    let mut sb = sb.super_block.lock();
+    let sb = &t_file.f_mnt;
+    let sb = &sb.super_block;
     sb.remove_file(file.clone());
     Ok(())
 }
@@ -150,8 +150,8 @@ fn construct_file(
         return Err(res.err().unwrap());
     }
     // 将文件放入超级块的文件表中
-    let binding = lookup_data.mnt.lock();
-    let mut sb = binding.super_block.lock();
+    let binding = &lookup_data.mnt;
+    let sb = &binding.super_block;
     sb.insert_file(file.clone());
     wwarn!("construct_file end");
     Ok(file)

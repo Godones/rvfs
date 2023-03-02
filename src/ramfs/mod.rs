@@ -7,7 +7,7 @@ use crate::inode::{create_tmp_inode_from_sb_blk, simple_statfs, Inode, InodeMode
 use crate::superblock::{FileSystemType, SuperBlock};
 use crate::{
     find_super_blk, wwarn, DataOps, File, FileMode, LookUpData, MountFlags, StrResult,
-    SuperBlockOps,
+    SuperBlockInner, SuperBlockOps,
 };
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
@@ -50,20 +50,11 @@ impl RamFsInode {
         }
     }
 }
-
-const fn root_fs_sb_blk_ops() -> SuperBlockOps {
-    SuperBlockOps {
-        alloc_inode: |_| Err("Not support"),
-        write_inode: |_, _| {},
-        dirty_inode: |_| {},
-        delete_inode: |_| {},
-        write_super: |_| {},
-        sync_fs: |_| {},
-        freeze_fs: |_| {},
-        unfreeze_fs: |_| {},
-        stat_fs: simple_statfs,
-    }
-}
+const RAMFS_SB_OPS: SuperBlockOps = {
+    let mut sb_ops = SuperBlockOps::empty();
+    sb_ops.stat_fs = simple_statfs;
+    sb_ops
+};
 
 const RAM_BLOCK_SIZE: u32 = 4096;
 const RAM_FILE_MAX_SIZE: usize = 4096;
@@ -71,11 +62,11 @@ const RAM_MAGIC: u32 = 0x12345678;
 
 /// 创建一个内存文件系统的超级块
 fn create_simple_ram_super_blk(
-    fs_type: Arc<Mutex<FileSystemType>>,
+    fs_type: Arc<FileSystemType>,
     flags: MountFlags,
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
-) -> StrResult<Arc<Mutex<SuperBlock>>> {
+) -> StrResult<Arc<SuperBlock>> {
     let sb_blk = SuperBlock {
         dev_desc: 0,
         device: None,
@@ -85,24 +76,27 @@ fn create_simple_ram_super_blk(
         mount_flag: flags,
         magic: RAM_MAGIC,
         file_system_type: Arc::downgrade(&fs_type),
-        super_block_ops: root_fs_sb_blk_ops(),
-        root: Arc::new(Mutex::new(DirEntry::empty())),
-        dirty_inode: vec![],
-        sync_inode: vec![],
-        files: vec![],
+        super_block_ops: RAMFS_SB_OPS,
+
+        inner: Mutex::new(SuperBlockInner {
+            dirty_inode: vec![],
+            sync_inode: vec![],
+            files: vec![],
+            root: Arc::new(Mutex::new(DirEntry::empty())),
+        }),
         blk_dev_name: dev_name.to_string(),
         data,
     };
-    let sb_blk = Arc::new(Mutex::new(sb_blk));
+    let sb_blk = Arc::new(sb_blk);
     Ok(sb_blk)
 }
 
 fn ramfs_simple_super_blk(
-    fs_type: Arc<Mutex<FileSystemType>>,
+    fs_type: Arc<FileSystemType>,
     flags: MountFlags,
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
-) -> StrResult<Arc<Mutex<SuperBlock>>> {
+) -> StrResult<Arc<SuperBlock>> {
     wwarn!("ramfs_simple_super_blk");
     let find_sb_blk = find_super_blk(fs_type.clone(), None);
     let sb_blk = match find_sb_blk {
@@ -119,12 +113,12 @@ fn ramfs_simple_super_blk(
     Ok(sb_blk)
 }
 
-fn ramfs_kill_super_blk(_super_blk: Arc<Mutex<SuperBlock>>) {}
+fn ramfs_kill_super_blk(_super_blk: Arc<SuperBlock>) {}
 
 /// 创建内存文件系统的根inode
 fn ramfs_create_root_inode(
     fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
-    sb_blk: Arc<Mutex<SuperBlock>>,
+    sb_blk: Arc<SuperBlock>,
     mode: InodeMode,
     inode_ops: InodeOps,
     file_ops: FileOps,
@@ -423,7 +417,7 @@ fn ramfs_read_link(ram_inode: &RamFsInode, buf: &mut [u8]) -> StrResult<usize> {
 fn ramfs_follow_link(ram_inode: &RamFsInode, lookup_data: &mut LookUpData) -> StrResult<()> {
     wwarn!("ramfs_follow_link");
     let target_name = ram_inode.data.clone();
-    let name = String::from_utf8(target_name.clone()).unwrap();
+    let name = String::from_utf8(target_name).unwrap();
     lookup_data.symlink_names.push(name);
     wwarn!("ramfs_follow_link end");
     Ok(())

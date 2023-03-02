@@ -34,7 +34,7 @@ pub fn vfs_getattr<T: ProcessFs>(file_name: &str) -> StrResult<FileAttribute> {
 /// 在文件系统未实现此功能时默认调用
 fn generic_get_file_attribute(inode: Arc<Mutex<Inode>>) -> FileAttribute {
     let sb_blk = inode.lock().super_blk.upgrade().unwrap();
-    let sb_blk = sb_blk.lock();
+    let sb_blk = sb_blk;
     let inode = inode.lock();
 
     FileAttribute {
@@ -55,10 +55,10 @@ fn generic_get_file_attribute(inode: Arc<Mutex<Inode>>) -> FileAttribute {
 /// get file system info according to file name
 pub fn vfs_statfs<T: ProcessFs>(file_name: &str) -> StrResult<StatFs> {
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
-    let sb_blk = lookup_data.mnt.lock().super_block.clone();
-    let fs_type = sb_blk.lock().file_system_type.upgrade().unwrap();
+    let sb_blk = lookup_data.mnt.super_block.clone();
+    let fs_type = sb_blk.file_system_type.upgrade().unwrap();
 
-    let sb_blk = sb_blk.lock();
+    let sb_blk = sb_blk;
     let stat_fs = StatFs {
         fs_type: sb_blk.magic,
         block_size: sb_blk.block_size as u64,
@@ -66,7 +66,7 @@ pub fn vfs_statfs<T: ProcessFs>(file_name: &str) -> StrResult<StatFs> {
         free_blocks: 0,
         total_inodes: 0,
         name_len: 0,
-        name: fs_type.lock().name.to_string(),
+        name: fs_type.name.to_string(),
     };
     Ok(stat_fs)
 }

@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use log::info;
-use spin::Mutex;
+use spin::{Mutex, MutexGuard};
 
 bitflags! {
     pub struct MountFlags:u32{
@@ -27,16 +27,20 @@ pub struct VfsMount {
     pub flag: MountFlags,
     /// 设备名
     pub dev_name: String,
-    /// 父文件系统
-    pub parent: Weak<Mutex<VfsMount>>,
-    /// 挂载点
-    pub mount_point: Arc<Mutex<DirEntry>>,
     /// 被挂载点的根目录
     pub root: Arc<Mutex<DirEntry>>,
     /// 本文件系统的超级快对象
-    pub super_block: Arc<Mutex<SuperBlock>>,
+    pub super_block: Arc<SuperBlock>,
+    inner: Mutex<VfsMountInner>,
+}
+#[derive(Debug)]
+pub struct VfsMountInner {
     /// 子挂载点链表
-    pub child: Vec<Arc<Mutex<VfsMount>>>,
+    pub child: Vec<Arc<VfsMount>>,
+    /// 父文件系统
+    pub parent: Weak<VfsMount>,
+    /// 挂载点
+    pub mount_point: Arc<Mutex<DirEntry>>,
 }
 
 impl Debug for VfsMount {
@@ -44,51 +48,64 @@ impl Debug for VfsMount {
         f.debug_struct("VfsMount")
             .field("flag", &self.flag)
             .field("dev_name", &self.dev_name)
-            .field("mount_point", &self.mount_point)
             .field("root", &self.root)
             .field("super_block", &self.super_block)
-            .field("child", &self.child)
+            .field("child", &self.inner)
             .finish()
     }
 }
 
 impl VfsMount {
+    /// user should not use this function
+    #[doc(hidden)]
     pub fn empty() -> Self {
-        VfsMount {
+        Self {
             flag: MountFlags::empty(),
             dev_name: String::new(),
-            parent: Weak::new(),
-            mount_point: Arc::new(Mutex::new(DirEntry::empty())),
             root: Arc::new(Mutex::new(DirEntry::empty())),
-            super_block: Arc::new(Mutex::new(SuperBlock::empty())),
-            child: Vec::new(),
+            super_block: Arc::new(SuperBlock::empty()),
+            inner: Mutex::new(VfsMountInner {
+                child: Vec::new(),
+                parent: Weak::new(),
+                mount_point: Arc::new(Mutex::new(DirEntry::empty())),
+            }),
         }
     }
     pub fn new(
         dev_name: &str,
-        super_block: Arc<Mutex<SuperBlock>>,
-        parent: Weak<Mutex<VfsMount>>,
-    ) -> VfsMount {
+        super_block: Arc<SuperBlock>,
+        parent: Weak<VfsMount>,
+        mnt_flags: MountFlags,
+    ) -> Arc<VfsMount> {
         // 设置挂载点所在目录与挂载的文件系统根目录相同
-        let dir = super_block.lock().root.clone();
-
-        VfsMount {
-            flag: MountFlags::empty(),
+        let dir = super_block.access_inner().root.clone();
+        let vfs_mount = VfsMount {
+            flag: mnt_flags,
             dev_name: dev_name.to_string(),
-            parent,
-            mount_point: dir.clone(),
-            root: dir,
+            root: dir.clone(),
             super_block,
-            child: Vec::new(),
+            inner: Mutex::new(VfsMountInner {
+                child: Vec::new(),
+                parent,
+                mount_point: dir.clone(),
+            }),
+        };
+        let mnt = Arc::new(vfs_mount);
+        if mnt.access_inner().parent.upgrade().is_none() {
+            mnt.access_inner().parent = Arc::downgrade(&mnt);
         }
+        mnt
+    }
+    pub fn access_inner(&self) -> MutexGuard<VfsMountInner> {
+        self.inner.lock()
     }
     /// 插入子挂载点
-    pub fn inert_child(&mut self, child: Arc<Mutex<VfsMount>>) {
-        self.child.push(child);
+    pub fn inert_child(&self, child: Arc<VfsMount>) {
+        self.access_inner().child.push(child);
     }
     /// 设置父挂载点
-    pub fn set_parent(&mut self, parent: Arc<Mutex<VfsMount>>) {
-        self.parent = Arc::downgrade(&parent);
+    pub fn set_parent(&self, parent: Arc<VfsMount>) {
+        self.access_inner().parent = Arc::downgrade(&parent);
     }
 }
 
@@ -108,7 +125,7 @@ pub fn do_mount<T: ProcessFs>(
     fs_type: &str,
     flags: MountFlags,
     data: Option<Box<dyn DataOps>>,
-) -> StrResult<Arc<Mutex<VfsMount>>> {
+) -> StrResult<Arc<VfsMount>> {
     wwarn!("do_mount");
     //检查路径名是否为空
     if dir_name.is_empty() {
@@ -146,26 +163,23 @@ fn do_add_mount(
     mnt_flags: MountFlags,
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
-) -> StrResult<Arc<Mutex<VfsMount>>> {
+) -> StrResult<Arc<VfsMount>> {
     wwarn!("do_add_mount");
     if fs_type.is_empty() {
         return Err("fs_type is empty");
     }
     // 加载文件系统超级块
-    let mount = do_kernel_mount(fs_type, flags, dev_name, data)?;
+    let mount = do_kernel_mount(fs_type, flags, dev_name, mnt_flags, data)?;
     info!("**do_add_mount: do_kernel_mount ok");
     // 检查是否对用户空间不可见
     if mount
-        .lock()
         .super_block
-        .lock()
         .mount_flag
         .contains(MountFlags::MNT_INTERNAL)
     {
         return Err("fs_internal");
     }
     // 挂载系统目录
-    mount.lock().flag = mnt_flags;
     info!("**do_add_mount: mount.lock().flag = mnt_flags ok");
     check_and_graft_tree(mount, look)
 }
@@ -175,8 +189,9 @@ pub fn do_kernel_mount(
     fs_type: &str,
     flags: MountFlags,
     dev_name: &str,
+    mnt_flags: MountFlags,
     data: Option<Box<dyn DataOps>>,
-) -> Result<Arc<Mutex<VfsMount>>, &'static str> {
+) -> Result<Arc<VfsMount>, &'static str> {
     wwarn!("do_kernel_mount");
     let fs_type = lookup_filesystem(fs_type);
     // 错误的文件系统类型
@@ -185,32 +200,23 @@ pub fn do_kernel_mount(
     }
     let fs_type = fs_type.unwrap();
     // 从设备读取文件系统超级块数据
-    let get_sb_func = fs_type.lock().get_super_blk;
+    let get_sb_func = fs_type.get_super_blk;
 
     let super_blk = (get_sb_func)(fs_type, flags, dev_name, data)?;
 
     // 分配挂载点描述符
-    let mount = VfsMount::new(dev_name, super_blk, Weak::new());
-    let mount = Arc::new(Mutex::new(mount));
-
-    // 将parent指向自身，表示它是一个独立的根
-    let parent = Arc::downgrade(&mount);
-    mount.lock().parent = parent;
+    let mount = VfsMount::new(dev_name, super_blk, Weak::new(), mnt_flags);
     wwarn!("do_kernel_mount end");
     Ok(mount)
 }
 /// 挂载到系统目录中
-fn check_and_graft_tree(
-    new_mount: Arc<Mutex<VfsMount>>,
-    look: &LookUpData,
-) -> StrResult<Arc<Mutex<VfsMount>>> {
+fn check_and_graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<Arc<VfsMount>> {
     wwarn!("check_and_graft_tree");
     let mut global_mount_lock = GLOBAL_HASH_MOUNT.write();
     // 如果文件系统已经被安装在指定的安装点上，
     // let mnt = look.mnt.lock();
     // let root_eq = Arc::ptr_eq(&mnt.root, &look.dentry);
     // let find_sb_ref = mnt.super_block.as_ref().unwrap();
-    let t_new_mnt = new_mount.lock();
     // let new_sb_ref = t_new_mnt.super_block.as_ref().unwrap();
     // let eq = Arc::ptr_eq(find_sb_ref, new_sb_ref);
     // if eq && root_eq {
@@ -218,7 +224,7 @@ fn check_and_graft_tree(
     // }
 
     // 或者该安装点是一个符号链接，则释放读写信号量并返回错误
-    if t_new_mnt
+    if new_mount
         .root
         .lock()
         .d_inode
@@ -228,14 +234,13 @@ fn check_and_graft_tree(
     {
         return Err("mnt is symlink");
     }
-    drop(t_new_mnt);
     graft_tree(new_mount.clone(), look)?;
     global_mount_lock.push(new_mount.clone());
     wwarn!("check_and_graft_tree end");
     Ok(new_mount)
 }
 
-fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<()> {
+fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
     wwarn!("graft_tree");
     // mount点应该是目录
     // 被mount的对象也应当(根)目录
@@ -247,7 +252,6 @@ fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<(
         .mode
         .contains(InodeMode::S_DIR)
         || !new_mount
-            .lock()
             .root
             .lock()
             .d_inode
@@ -284,10 +288,10 @@ fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<(
     // }
 
     // 设置父节点以及挂载点目录对象
-    new_mount.lock().parent = Arc::downgrade(&look.mnt);
-    new_mount.lock().mount_point = look.dentry.clone();
+    new_mount.set_parent(look.mnt.clone());
+    new_mount.access_inner().mount_point = look.dentry.clone();
     // 加入上级对象的子对象链表中
-    look.mnt.lock().inert_child(new_mount);
+    look.mnt.inert_child(new_mount);
     look.dentry.lock().mount_count += 1;
 
     // info!("parent: {:#?}", look.mnt);
@@ -304,23 +308,25 @@ fn graft_tree(new_mount: Arc<Mutex<VfsMount>>, look: &LookUpData) -> StrResult<(
 /// 载。否则，查看对应的 VFS 超级块，如果该文件系统的 VFS 超级块标志为“脏”，则必须
 /// 将超级块信息写回磁盘。
 /// TODO do_unmount
-pub fn do_unmount(mount: Arc<Mutex<VfsMount>>, _flags: MountFlags) -> StrResult<()> {
+pub fn do_unmount(mount: Arc<VfsMount>, _flags: MountFlags) -> StrResult<()> {
     let mut global_mount_lock = GLOBAL_HASH_MOUNT.write();
     // 检查是否有子挂载点
-    if !mount.lock().child.is_empty() {
+    if !mount.access_inner().child.is_empty() {
         return Err("Have child");
     } else {
-        let parent = mount.lock().parent.upgrade().unwrap();
+        let parent = mount.access_inner().parent.upgrade().unwrap();
         // 从父挂载点的子挂载点链表中删除
-        parent.lock().child.retain(|x| !Arc::ptr_eq(x, &mount));
+        parent
+            .access_inner()
+            .child
+            .retain(|x| !Arc::ptr_eq(x, &mount));
     }
     // 从全局挂载点链表中删除
     global_mount_lock.retain(|x| !Arc::ptr_eq(x, &mount));
     Ok(())
 }
 
-pub fn mnt_want_write(mnt: &Arc<Mutex<VfsMount>>) -> bool {
-    let mnt = mnt.lock();
+pub fn mnt_want_write(mnt: &Arc<VfsMount>) -> bool {
     if mnt.flag.contains(MountFlags::MNT_READ_ONLY) {
         return false;
     }

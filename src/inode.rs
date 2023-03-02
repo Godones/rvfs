@@ -42,7 +42,7 @@ pub struct Inode {
     pub file_size: usize,
     /// 文件的块数量。以512字节为单位
     pub blk_count: usize,
-    pub super_blk: Weak<Mutex<SuperBlock>>,
+    pub super_blk: Weak<SuperBlock>,
 }
 impl Inode {
     pub fn empty() -> Self {
@@ -136,25 +136,23 @@ impl InodeOps {
     }
 }
 
-pub fn simple_statfs(sb_blk: Arc<Mutex<SuperBlock>>) -> StrResult<StatFs> {
+pub fn simple_statfs(sb_blk: Arc<SuperBlock>) -> StrResult<StatFs> {
     let stat = StatFs {
-        fs_type: sb_blk.lock().magic,
-        block_size: sb_blk.lock().block_size as u64,
+        fs_type: sb_blk.magic,
+        block_size: sb_blk.block_size as u64,
         total_blocks: 0,
         free_blocks: 0,
         total_inodes: 0,
         name_len: 0,
-        name: sb_blk.lock().blk_dev_name.to_string(),
+        name: sb_blk.blk_dev_name.to_string(),
     };
     Ok(stat)
 }
 
 /// 创建一个inode
-pub fn create_tmp_inode_from_sb_blk(
-    sb_blk: Arc<Mutex<SuperBlock>>,
-) -> StrResult<Arc<Mutex<Inode>>> {
+pub fn create_tmp_inode_from_sb_blk(sb_blk: Arc<SuperBlock>) -> StrResult<Arc<Mutex<Inode>>> {
     wwarn!("create_tmp_inode_from_sb_blk");
-    let create_func = sb_blk.lock().super_block_ops.alloc_inode;
+    let create_func = sb_blk.super_block_ops.alloc_inode;
     let res = create_func(sb_blk.clone());
     let inode = match res {
         // 如果文件系统不支持，则需要直接创建
@@ -166,9 +164,9 @@ pub fn create_tmp_inode_from_sb_blk(
     // 设置inode的超级块
     inode_lk.super_blk = Arc::downgrade(&sb_blk);
     // 设置inode的块大小
-    inode_lk.blk_size = sb_blk.lock().block_size;
+    inode_lk.blk_size = sb_blk.block_size;
     // 设置inode的块设备
-    inode_lk.blk_dev = sb_blk.lock().device.clone();
+    inode_lk.blk_dev = sb_blk.device.clone();
     // 设置硬链接数
     inode_lk.hard_links = 1;
     drop(inode_lk);

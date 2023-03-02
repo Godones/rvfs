@@ -42,10 +42,10 @@ lazy_static! {
     pub static ref GLOBAL_DIRENTRY: RwLock<Vec<Arc<Mutex<DirEntry>>>> = RwLock::new(Vec::new());
 }
 lazy_static! {
-    pub static ref GLOBAL_HASH_MOUNT: RwLock<Vec<Arc<Mutex<VfsMount>>>> = RwLock::new(Vec::new());
+    pub static ref GLOBAL_HASH_MOUNT: RwLock<Vec<Arc<VfsMount>>> = RwLock::new(Vec::new());
 }
 lazy_static! {
-    pub static ref ALL_FS: RwLock<Vec<Arc<Mutex<FileSystemType>>>> = RwLock::new(Vec::new());
+    pub static ref ALL_FS: RwLock<Vec<Arc<FileSystemType>>> = RwLock::new(Vec::new());
 }
 
 /// 初始化虚拟文件系统
@@ -54,12 +54,19 @@ pub fn init_vfs() {
     iinfo!("init_vfs");
     register_filesystem(root_fs_type()).unwrap();
     // 生成内存文件系统的超级块
-    let mnt = do_kernel_mount("rootfs", MountFlags::MNT_NO_DEV, "", None).unwrap();
+    let mnt = do_kernel_mount(
+        "rootfs",
+        MountFlags::MNT_NO_DEV,
+        "",
+        MountFlags::MNT_NO_DEV,
+        None,
+    )
+    .unwrap();
     // info!("[init_vfs] mnt: {:#?}", mnt);
     // 设置进程的文件系统相关信息
     // for test
-    PROCESS_FS_CONTEXT.lock().cwd = mnt.lock().root.clone();
-    PROCESS_FS_CONTEXT.lock().root = mnt.lock().root.clone();
+    PROCESS_FS_CONTEXT.lock().cwd = mnt.root.clone();
+    PROCESS_FS_CONTEXT.lock().root = mnt.root.clone();
     PROCESS_FS_CONTEXT.lock().cmnt = mnt.clone();
     PROCESS_FS_CONTEXT.lock().rmnt = mnt.clone();
     iinfo!("init_vfs end");
@@ -72,17 +79,17 @@ pub struct ProcessFsContext {
     /// 根目录
     pub root: Arc<Mutex<DirEntry>>,
     /// 当前挂载点
-    pub cmnt: Arc<Mutex<VfsMount>>,
+    pub cmnt: Arc<VfsMount>,
     /// 根挂载点
-    pub rmnt: Arc<Mutex<VfsMount>>,
+    pub rmnt: Arc<VfsMount>,
 }
 
 lazy_static! {
     pub static ref PROCESS_FS_CONTEXT: Mutex<ProcessFsContext> = Mutex::new(ProcessFsContext {
         cwd: Arc::new(Mutex::new(DirEntry::empty())),
         root: Arc::new(Mutex::new(DirEntry::empty())),
-        cmnt: Arc::new(Mutex::new(VfsMount::empty())),
-        rmnt: Arc::new(Mutex::new(VfsMount::empty())),
+        cmnt: Arc::new(VfsMount::empty()),
+        rmnt: Arc::new(VfsMount::empty()),
     });
 }
 
@@ -110,13 +117,13 @@ impl ProcessFs for FakeFSC {
 #[macro_export]
 macro_rules! iinfo {
     ($t:expr) => {
-        crate::info!("[{}] [{}] :{}", file!(), $t, line!());
+        $crate::info!("[{}] [{}] :{}", file!(), $t, line!());
     };
 }
 
 #[macro_export]
 macro_rules! wwarn {
     ($t:expr) => {
-        crate::warn!("[{}] [{}] :{}", file!(), $t, line!());
+        $crate::warn!("[{}] [{}] :{}", file!(), $t, line!());
     };
 }

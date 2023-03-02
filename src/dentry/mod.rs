@@ -213,7 +213,7 @@ fn __end_with_slashes<T: ProcessFs>(
 ///
 /// 需要注意的是，如果当前目录是一个安装点，那么需要回退到父目录的安装点
 fn recede_parent<T: ProcessFs>(
-    mnt: &mut Arc<Mutex<VfsMount>>,
+    mnt: &mut Arc<VfsMount>,
     dentry: &mut Arc<Mutex<DirEntry>>,
 ) -> StrResult<()> {
     let mut t_mnt = mnt.clone();
@@ -228,20 +228,20 @@ fn recede_parent<T: ProcessFs>(
             break;
         }
         // 如果当前目录不是所在文件系统的根目录，那么需要回退
-        if !Arc::ptr_eq(&t_dentry, &t_mnt.lock().root) {
+        if !Arc::ptr_eq(&t_dentry, &t_mnt.root) {
             let parent = t_dentry.lock().parent.clone().upgrade().unwrap();
             t_dentry = parent;
             break;
         }
         let _global_mnt = GLOBAL_HASH_MOUNT.read();
         // 如果当前目录是文件系统的根目录，那么需要回退到父文件系统的根目录
-        let parent_mnt = t_mnt.lock().parent.clone().upgrade();
+        let parent_mnt = t_mnt.access_inner().parent.clone().upgrade();
         if parent_mnt.is_none() {
             // 说明到达顶级文件系统
             break;
         }
         // 获取挂载点
-        t_dentry = t_mnt.lock().mount_point.clone();
+        t_dentry = t_mnt.access_inner().mount_point.clone();
         t_mnt = parent_mnt.unwrap();
     }
     // 处理父目录也是安装点的情况
@@ -252,7 +252,7 @@ fn recede_parent<T: ProcessFs>(
 pub fn find_file_indir(
     lookup_data: &mut LookUpData,
     name: &str,
-) -> StrResult<(Arc<Mutex<VfsMount>>, Arc<Mutex<DirEntry>>)> {
+) -> StrResult<(Arc<VfsMount>, Arc<Mutex<DirEntry>>)> {
     wwarn!("find_file_indir");
     // 检查是否是在目录下查找
     if !lookup_data.dentry.lock().d_inode.lock().mode == InodeMode::S_DIR {
@@ -323,7 +323,7 @@ fn __find_file_from_device(
 /// 找到当前目录的最后一个挂载点
 /// 并切换到该挂载点
 pub fn advance_mount(
-    mnt: &mut Arc<Mutex<VfsMount>>,
+    mnt: &mut Arc<VfsMount>,
     next_dentry: &mut Arc<Mutex<DirEntry>>,
 ) -> StrResult<()> {
     wwarn!("advance_mount");
@@ -339,7 +339,7 @@ pub fn advance_mount(
         }
         info!("step into next mount point");
         t_mnt = child_mnt.unwrap();
-        t_dentry = t_mnt.lock().root.clone();
+        t_dentry = t_mnt.root.clone();
         mount_count = t_dentry.lock().mount_count;
     }
     *mnt = t_mnt;
@@ -349,20 +349,16 @@ pub fn advance_mount(
 }
 
 /// 在当前挂载点中查找子挂载点
-fn lookup_mount(
-    mnt: Arc<Mutex<VfsMount>>,
-    next_dentry: Arc<Mutex<DirEntry>>,
-) -> StrResult<Arc<Mutex<VfsMount>>> {
+fn lookup_mount(mnt: Arc<VfsMount>, next_dentry: Arc<Mutex<DirEntry>>) -> StrResult<Arc<VfsMount>> {
     let global_vfsmount_lock = GLOBAL_HASH_MOUNT.read();
     global_vfsmount_lock
         .iter()
         .find(|x| {
-            let x = x.lock();
-            let parent = x.parent.upgrade();
+            let parent = x.access_inner().parent.upgrade();
             //  此挂载点的父挂载点是当前挂载点并且挂载点的根目录是参数指定
             parent.is_some()
                 && Arc::ptr_eq(&parent.unwrap(), &mnt)
-                && Arc::ptr_eq(&x.mount_point, &next_dentry)
+                && Arc::ptr_eq(&x.access_inner().mount_point, &next_dentry)
         })
         .ok_or("mount not found")
         .map(|x| x.clone())
@@ -433,7 +429,7 @@ pub fn vfs_rmdir<T: ProcessFs>(dir_name: &str) -> StrResult<()> {
     }
     info!("mnt is writable");
     let dentry = lookup_data.dentry;
-    let parent = dentry.lock().parent.upgrade().unwrap().clone();
+    let parent = dentry.lock().parent.upgrade().unwrap();
     let parent_inode = parent.lock().d_inode.clone();
     may_delete(parent_inode.clone(), dentry.clone(), true)?;
 
@@ -502,10 +498,8 @@ pub fn may_delete(
         if Arc::ptr_eq(&parent, &dentry) {
             return Err("can't remove root directory");
         }
-    } else {
-        if dentry.lock().d_inode.lock().mode == InodeMode::S_DIR {
-            return Err("is a directory");
-        }
+    } else if dentry.lock().d_inode.lock().mode == InodeMode::S_DIR {
+        return Err("is a directory");
     }
     wwarn!("may_delete end");
     Ok(())
@@ -656,19 +650,9 @@ fn do_internal_rename(
     }
     // rename
     if is_dir {
-        vfs_rename_dir(
-            old_dir.clone(),
-            old_dentry.clone(),
-            new_dir.clone(),
-            new_dentry.clone(),
-        )?;
+        vfs_rename_dir(old_dir, old_dentry, new_dir, new_dentry)?;
     } else {
-        vfs_rename_other(
-            old_dir.clone(),
-            old_dentry.clone(),
-            new_dir.clone(),
-            new_dentry.clone(),
-        )?;
+        vfs_rename_other(old_dir, old_dentry, new_dir, new_dentry)?;
     }
     wwarn!("do_internal_rename end");
     Ok(())

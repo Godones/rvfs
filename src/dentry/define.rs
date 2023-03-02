@@ -176,7 +176,7 @@ pub struct LookUpData {
     ///  查找到的目录对象
     pub dentry: Arc<Mutex<DirEntry>>,
     /// 已经安装的文件系统对象
-    pub mnt: Arc<Mutex<VfsMount>>,
+    pub mnt: Arc<VfsMount>,
     /// 路径名最后一个分量的类型。如PATHTYPE_NORMAL
     pub path_type: PathType,
     /// 符号链接查找的嵌套深度
@@ -186,11 +186,7 @@ pub struct LookUpData {
 }
 
 impl LookUpData {
-    pub fn new(
-        flags: LookUpFlags,
-        dentry: Arc<Mutex<DirEntry>>,
-        mnt: Arc<Mutex<VfsMount>>,
-    ) -> Self {
+    pub fn new(flags: LookUpFlags, dentry: Arc<Mutex<DirEntry>>, mnt: Arc<VfsMount>) -> Self {
         Self {
             last: "".to_string(),
             name: "".to_string(),
@@ -205,7 +201,7 @@ impl LookUpData {
     pub fn update_dentry(&mut self, dentry: Arc<Mutex<DirEntry>>) {
         self.dentry = dentry;
     }
-    pub fn update_mnt(&mut self, mnt: Arc<Mutex<VfsMount>>) {
+    pub fn update_mnt(&mut self, mnt: Arc<VfsMount>) {
         self.mnt = mnt;
     }
     pub fn inc_nested_count(&mut self) {

@@ -7,17 +7,17 @@ use spin::Mutex;
 ///
 /// 由于vfs模块与内核模块分离了，所以需要进程提供一些信息
 pub struct ProcessFsInfo {
-    pub root_mount: Arc<Mutex<VfsMount>>,
+    pub root_mount: Arc<VfsMount>,
     pub root_dir: Arc<Mutex<DirEntry>>,
     pub current_dir: Arc<Mutex<DirEntry>>,
-    pub current_mount: Arc<Mutex<VfsMount>>,
+    pub current_mount: Arc<VfsMount>,
 }
 impl ProcessFsInfo {
     pub fn new(
-        root_mount: Arc<Mutex<VfsMount>>,
+        root_mount: Arc<VfsMount>,
         root_dir: Arc<Mutex<DirEntry>>,
         current_dir: Arc<Mutex<DirEntry>>,
-        current_mount: Arc<Mutex<VfsMount>>,
+        current_mount: Arc<VfsMount>,
     ) -> ProcessFsInfo {
         ProcessFsInfo {
             root_mount,

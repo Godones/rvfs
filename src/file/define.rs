@@ -7,7 +7,7 @@ use spin::Mutex;
 pub struct File {
     pub f_dentry: Arc<Mutex<DirEntry>>,
     // 含有该文件的已经安装的文件系统
-    pub f_mnt: Arc<Mutex<VfsMount>>,
+    pub f_mnt: Arc<VfsMount>,
     // 文件操作
     pub f_ops: FileOps,
     pub flags: FileFlags,
@@ -35,7 +35,7 @@ impl Debug for File {
 impl File {
     pub fn new(
         dentry: Arc<Mutex<DirEntry>>,
-        mnt: Arc<Mutex<VfsMount>>,
+        mnt: Arc<VfsMount>,
         flags: FileFlags,
         mode: FileMode,
         f_ops: FileOps,
