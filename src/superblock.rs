@@ -47,7 +47,7 @@ pub struct SuperBlockInner {
     /// 需要同步到磁盘的inode
     pub sync_inode: Vec<Arc<Inode>>,
     /// 打开的文件对象
-    pub files: Vec<Arc<Mutex<File>>>,
+    pub files: Vec<Arc<File>>,
     /// 文件系统根节点
     pub root: Arc<DirEntry>,
 }
@@ -86,10 +86,10 @@ impl SuperBlock {
     pub fn insert_sync_inode(&self, inode: Arc<Inode>) {
         self.access_inner().sync_inode.push(inode);
     }
-    pub fn insert_file(&self, file: Arc<Mutex<File>>) {
+    pub fn insert_file(&self, file: Arc<File>) {
         self.access_inner().files.push(file);
     }
-    pub fn remove_file(&self, file: Arc<Mutex<File>>) {
+    pub fn remove_file(&self, file: Arc<File>) {
         self.access_inner().files.retain(|f| !Arc::ptr_eq(f, &file));
     }
     pub fn remove_inode(&self, inode: Arc<Inode>) {

@@ -51,7 +51,6 @@ fn main() {
     println!(
         "/tmp/f1 hard_links: {:#?}",
         file_f2
-            .lock()
             .f_dentry
             .access_inner()
             .d_inode
@@ -62,7 +61,6 @@ fn main() {
     println!(
         "/tmp/f1 hard_links: {:#?}",
         file_f2
-            .lock()
             .f_dentry
             .access_inner()
             .d_inode
@@ -73,7 +71,6 @@ fn main() {
     println!(
         "/tmp/f1 hard_links: {:#?}",
         file_f2
-            .lock()
             .f_dentry
             .access_inner()
             .d_inode

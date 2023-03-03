@@ -6,13 +6,16 @@ use spin::Mutex;
 
 pub struct File {
     pub f_dentry: Arc<DirEntry>,
-    // 含有该文件的已经安装的文件系统
     pub f_mnt: Arc<VfsMount>,
     // 文件操作
     pub f_ops: FileOps,
     pub flags: FileFlags,
     // 打开模式
     pub f_mode: FileMode,
+    inner:Mutex<FileInner>,
+}
+#[derive(Debug)]
+pub struct FileInner{
     // 文件偏移量
     pub f_pos: usize,
     pub f_uid: u32,
@@ -24,10 +27,8 @@ impl Debug for File {
         f.debug_struct("File")
             .field("flags", &self.flags)
             .field("f_mode", &self.f_mode)
-            .field("f_pos", &self.f_pos)
-            .field("f_uid", &self.f_uid)
-            .field("f_gid", &self.f_gid)
             .field("f_dentry", &self.f_dentry)
+            .field("inner",&self.inner)
             .finish()
     }
 }
@@ -46,9 +47,13 @@ impl File {
             f_ops,
             flags,
             f_mode: mode,
-            f_pos: 0,
-            f_uid: 0,
-            f_gid: 0,
+            inner:Mutex::new(
+                FileInner{
+                    f_pos: 0,
+                    f_uid: 0,
+                    f_gid: 0,
+                }
+            )
         }
     }
 }
@@ -89,25 +94,25 @@ pub struct VmArea {
 
 #[derive(Clone)]
 pub struct FileOps {
-    pub llseek: fn(file: Arc<Mutex<File>>, offset: u64, whence: SeekFrom) -> StrResult<u64>,
-    pub read: fn(file: Arc<Mutex<File>>, buf: &mut [u8], offset: u64) -> StrResult<usize>,
-    pub write: fn(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResult<usize>,
+    pub llseek: fn(file: Arc<File>, offset: u64, whence: SeekFrom) -> StrResult<u64>,
+    pub read: fn(file: Arc<File>, buf: &mut [u8], offset: u64) -> StrResult<usize>,
+    pub write: fn(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize>,
     // 对于设备文件来说，这个字段应该为NULL。它仅用于读取目录，只对文件系统有用。
     // filldir_t用于提取目录项的各个字段。
     // TODO readdir
-    pub readdir: fn(file: Arc<Mutex<File>>) -> StrResult<DirContext>,
+    pub readdir: fn(file: Arc<File>) -> StrResult<DirContext>,
     /// 系统调用ioctl提供了一种执行设备特殊命令的方法(如格式化软盘的某个磁道，这既不是读也不是写操作)。
     //另外，内核还能识别一部分ioctl命令，而不必调用fops表中的ioctl。如果设备不提供ioctl入口点，
     // 则对于任何内核未预先定义的请求，ioctl系统调用将返回错误(-ENOTYY)
     pub ioctl:
-        fn(dentry: Arc<Inode>, file: Arc<Mutex<File>>, cmd: u32, arg: u64) -> StrResult<isize>,
-    pub mmap: fn(file: Arc<Mutex<File>>, vma: VmArea) -> StrResult<()>,
-    pub open: fn(file: Arc<Mutex<File>>) -> StrResult<()>,
-    pub flush: fn(file: Arc<Mutex<File>>) -> StrResult<()>,
+        fn(dentry: Arc<Inode>, file: Arc<File>, cmd: u32, arg: u64) -> StrResult<isize>,
+    pub mmap: fn(file: Arc<File>, vma: VmArea) -> StrResult<()>,
+    pub open: fn(file: Arc<File>) -> StrResult<()>,
+    pub flush: fn(file: Arc<File>) -> StrResult<()>,
     /// 该方法是fsync系统调用的后端实现
     // 用户调用它来刷新待处理的数据。
     // 如果驱动程序没有实现这一方法，fsync系统调用将返回-EINVAL。
-    pub fsync: fn(file: Arc<Mutex<File>>, datasync: bool) -> StrResult<()>,
+    pub fsync: fn(file: Arc<File>, datasync: bool) -> StrResult<()>,
 }
 
 impl Debug for FileOps {

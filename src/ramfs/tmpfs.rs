@@ -153,11 +153,11 @@ fn tmpfs_create(dir: Arc<Inode>, dentry: Arc<DirEntry>, mode: FileMode) -> StrRe
     Ok(())
 }
 
-fn tmpfs_read_file(file: Arc<Mutex<File>>, buf: &mut [u8], offset: u64) -> StrResult<usize> {
+fn tmpfs_read_file(file: Arc<File>, buf: &mut [u8], offset: u64) -> StrResult<usize> {
     wwarn!("tmpfs_read_file");
     ramfs_read_file(TMP_FS.clone(), file, buf, offset)
 }
-fn tmpfs_write_file(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResult<usize> {
+fn tmpfs_write_file(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
     wwarn!("tmpfs_write_file");
     ramfs_write_file(TMP_FS.clone(), file, buf, offset)
 }
@@ -222,9 +222,9 @@ fn tmpfs_follow_link(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> Str
 }
 
 /// read the contents of a directory
-fn tmpfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
+fn tmpfs_readdir(file: Arc<File>) -> StrResult<DirContext> {
     wwarn!("rootfs_readdir");
-    let inode = file.lock().f_dentry.access_inner().d_inode.clone();
+    let inode = file.f_dentry.access_inner().d_inode.clone();
     let inode = inode;
     let number = inode.number;
     let bind = TMP_FS.lock();

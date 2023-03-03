@@ -245,12 +245,12 @@ fn ramfs_create(
 
 fn ramfs_read_file(
     fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
-    file: Arc<Mutex<File>>,
+    file: Arc<File>,
     buf: &mut [u8],
     offset: u64,
 ) -> StrResult<usize> {
-    let dentry = &mut file.lock().f_dentry;
-    let inode = &mut dentry.access_inner().d_inode;
+    let dentry = &file.f_dentry;
+    let inode = &dentry.access_inner().d_inode;
     // 获取inode的编号
     let number = inode.number;
     let mut binding = fs.lock();
@@ -271,13 +271,13 @@ fn ramfs_read_file(
 
 fn ramfs_write_file(
     fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
-    file: Arc<Mutex<File>>,
+    file: Arc<File>,
     buf: &[u8],
     offset: u64,
 ) -> StrResult<usize> {
     wwarn!("ramfs_write_file");
-    let dentry = &mut file.lock().f_dentry;
-    let inode = &mut dentry.access_inner().d_inode;
+    let dentry = &file.f_dentry;
+    let inode = &dentry.access_inner().d_inode;
     // 获取inode的编号
     let number = inode.number;
     info!("number: {}", number);

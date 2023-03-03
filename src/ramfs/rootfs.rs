@@ -164,13 +164,13 @@ fn rootfs_create(dir: Arc<Inode>, dentry: Arc<DirEntry>, mode: FileMode) -> StrR
     Ok(())
 }
 
-fn rootfs_read_file(file: Arc<Mutex<File>>, buf: &mut [u8], offset: u64) -> StrResult<usize> {
+fn rootfs_read_file(file: Arc<File>, buf: &mut [u8], offset: u64) -> StrResult<usize> {
     wwarn!("rootfs_read_file");
     let len = ramfs_read_file(ROOT_FS.clone(), file, buf, offset)?;
     wwarn!("rootfs_read_file end");
     Ok(len)
 }
-fn rootfs_write_file(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResult<usize> {
+fn rootfs_write_file(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
     wwarn!("rootfs_write_file");
     let len = ramfs_write_file(ROOT_FS.clone(), file, buf, offset)?;
     wwarn!("rootfs_write_file end");
@@ -237,9 +237,9 @@ fn rootfs_follow_link(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> St
 }
 
 /// read the contents of a directory
-fn rootfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
+fn rootfs_readdir(file: Arc<File>) -> StrResult<DirContext> {
     wwarn!("rootfs_readdir");
-    let inode = file.lock().f_dentry.access_inner().d_inode.clone();
+    let inode = file.f_dentry.access_inner().d_inode.clone();
     let inode = inode;
     let number = inode.number;
     let bind = ROOT_FS.lock();

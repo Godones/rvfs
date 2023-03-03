@@ -5,7 +5,7 @@ use crate::{
 };
 use alloc::sync::Arc;
 use log::{error, info};
-use spin::Mutex;
+
 
 mod define;
 pub use define::*;
@@ -17,7 +17,7 @@ pub fn vfs_open_file<T: ProcessFs>(
     name: &str,
     flags: FileFlags,
     mode: FileMode,
-) -> StrResult<Arc<Mutex<File>>> {
+) -> StrResult<Arc<File>> {
     wwarn!("open_file");
     let mut flags = flags;
     //  如果flag包含truncate标志，则将其转换为读写模式
@@ -28,27 +28,26 @@ pub fn vfs_open_file<T: ProcessFs>(
     construct_file(&mut lookup_data, flags, mode)
 }
 
-pub fn vfs_close_file<T: ProcessFs>(file: Arc<Mutex<File>>) -> StrResult<()> {
+pub fn vfs_close_file<T: ProcessFs>(file: Arc<File>) -> StrResult<()> {
     // 调用文件的flush方法，只有少数驱动才会设置这个方法。
-    let flush = file.lock().f_ops.flush;
+    let flush = file.f_ops.flush;
     flush(file.clone())?;
-    let t_file = file.lock();
-    let sb = &t_file.f_mnt;
+    let sb = &file.f_mnt;
     let sb = &sb.super_block;
     sb.remove_file(file.clone());
     Ok(())
 }
 
 pub fn vfs_read_file<T: ProcessFs>(
-    file: Arc<Mutex<File>>,
+    file: Arc<File>,
     buf: &mut [u8],
     offset: u64,
 ) -> StrResult<usize> {
-    let mode = file.lock().f_mode;
+    let mode = file.f_mode;
     if !mode.contains(FileMode::FMODE_READ) {
         return Err("file not open for reading");
     }
-    let read = file.lock().f_ops.read;
+    let read = file.f_ops.read;
 
     read(file.clone(), buf, offset)
 }
@@ -57,24 +56,21 @@ pub fn vfs_read_file<T: ProcessFs>(
 
 /// write file
 pub fn vfs_write_file<T: ProcessFs>(
-    file: Arc<Mutex<File>>,
+    file: Arc<File>,
     buf: &[u8],
     offset: u64,
 ) -> StrResult<usize> {
-    let file_lock = file.lock();
-    let write = file_lock.f_ops.write;
-    let mode = file_lock.f_mode;
+    let write = file.f_ops.write;
+    let mode = file.f_mode;
     if !mode.contains(FileMode::FMODE_WRITE) {
         return Err("file not open for writing");
     }
     // check whether file is valid
-    let inode = file_lock.f_dentry.access_inner().d_inode.clone();
+    let inode = file.f_dentry.access_inner().d_inode.clone();
     if !inode.is_valid() {
         error!("file is invalid");
         return Err("file is invalid");
     }
-
-    drop(file_lock);
     write(file.clone(), buf, offset)
 }
 
@@ -113,23 +109,23 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
 }
 
 /// llseek
-pub fn vfs_llseek(file: Arc<Mutex<File>>, offset: u64, whence: SeekFrom) -> StrResult<u64> {
-    let llseek = file.lock().f_ops.llseek;
+pub fn vfs_llseek(file: Arc<File>, offset: u64, whence: SeekFrom) -> StrResult<u64> {
+    let llseek = file.f_ops.llseek;
     llseek(file.clone(), offset, whence)
 }
 
-pub fn vfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
-    let readdir = file.lock().f_ops.readdir;
+pub fn vfs_readdir(file: Arc<File>) -> StrResult<DirContext> {
+    let readdir = file.f_ops.readdir;
     readdir(file)
 }
 
-pub fn vfs_fsync(file: Arc<Mutex<File>>) -> StrResult<()> {
+pub fn vfs_fsync(file: Arc<File>) -> StrResult<()> {
     // check file mode
-    let mode = file.lock().f_mode;
+    let mode = file.f_mode;
     if !mode.contains(FileMode::FMODE_WRITE) {
         return Err("file not open for writing");
     }
-    let fsync = file.lock().f_ops.fsync;
+    let fsync = file.f_ops.fsync;
     fsync(file, true)
 }
 
@@ -137,14 +133,14 @@ fn construct_file(
     lookup_data: &LookUpData,
     flags: FileFlags,
     mode: FileMode,
-) -> StrResult<Arc<Mutex<File>>> {
+) -> StrResult<Arc<File>> {
     wwarn!("construct_file");
     let dentry = lookup_data.dentry.clone();
     let inode = dentry.access_inner().d_inode.clone();
     let f_ops = inode.file_ops.clone();
     let open = f_ops.open;
     let file = File::new(dentry, lookup_data.mnt.clone(), flags, mode, f_ops);
-    let file = Arc::new(Mutex::new(file));
+    let file = Arc::new(file);
     // TODO impl open in inodeops
     let res = open(file.clone());
     if res.is_err() {
