@@ -112,8 +112,6 @@ fn tmpfs_get_super_blk(
         TMPFS_DIR_FILE_OPS,
         number,
     )?;
-    // 根目录硬链接计数不用自增1
-    inode.lock().hard_links -= 1;
     // 创建目录项
     let dentry = ramfs_create_root_dentry(None, inode)?;
     sb_blk.update_root(dentry);
@@ -123,11 +121,7 @@ fn tmpfs_get_super_blk(
     Ok(sb_blk)
 }
 
-fn tmpfs_mkdir(
-    dir: Arc<Mutex<Inode>>,
-    dentry: Arc<Mutex<DirEntry>>,
-    attr: FileMode,
-) -> StrResult<()> {
+fn tmpfs_mkdir(dir: Arc<Inode>, dentry: Arc<DirEntry>, attr: FileMode) -> StrResult<()> {
     wwarn!("tmpfs_mkdir");
     let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_mkdir(
@@ -143,11 +137,7 @@ fn tmpfs_mkdir(
     Ok(())
 }
 
-fn tmpfs_create(
-    dir: Arc<Mutex<Inode>>,
-    dentry: Arc<Mutex<DirEntry>>,
-    mode: FileMode,
-) -> StrResult<()> {
+fn tmpfs_create(dir: Arc<Inode>, dentry: Arc<DirEntry>, mode: FileMode) -> StrResult<()> {
     wwarn!("tmpfs_create");
     let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_create(
@@ -174,9 +164,9 @@ fn tmpfs_write_file(file: Arc<Mutex<File>>, buf: &[u8], offset: u64) -> StrResul
 
 /// 创建硬链接
 fn tmpfs_link(
-    old_dentry: Arc<Mutex<DirEntry>>,
-    dir: Arc<Mutex<Inode>>,
-    new_dentry: Arc<Mutex<DirEntry>>,
+    old_dentry: Arc<DirEntry>,
+    dir: Arc<Inode>,
+    new_dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
     wwarn!("tmpfs_link");
     let _number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
@@ -186,7 +176,7 @@ fn tmpfs_link(
 }
 
 /// 删除硬链接
-fn tmpfs_unlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
+fn tmpfs_unlink(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
     wwarn!("tmpfs_link");
     ramfs_unlink(TMP_FS.clone(), dir, dentry)?;
     wwarn!("tmpfs_link end");
@@ -194,11 +184,7 @@ fn tmpfs_unlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResu
 }
 
 /// create a symbolic link
-fn tmpfs_symlink(
-    dir: Arc<Mutex<Inode>>,
-    dentry: Arc<Mutex<DirEntry>>,
-    target: &str,
-) -> StrResult<()> {
+fn tmpfs_symlink(dir: Arc<Inode>, dentry: Arc<DirEntry>, target: &str) -> StrResult<()> {
     wwarn!("tmpfs_symlink");
     let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_symlink(
@@ -216,9 +202,9 @@ fn tmpfs_symlink(
 }
 
 /// read the target of a symbolic link
-fn tmpfs_readlink(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize> {
-    let inode = dentry.lock().d_inode.clone();
-    let inode = inode.lock();
+fn tmpfs_readlink(dentry: Arc<DirEntry>, buf: &mut [u8]) -> StrResult<usize> {
+    let inode = dentry.access_inner().d_inode.clone();
+    let inode = inode;
     let number = inode.number;
     let bind = TMP_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
@@ -226,9 +212,9 @@ fn tmpfs_readlink(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usi
 }
 
 /// follow a symbolic link
-fn tmpfs_follow_link(dentry: Arc<Mutex<DirEntry>>, lookup_data: &mut LookUpData) -> StrResult<()> {
-    let inode = dentry.lock().d_inode.clone();
-    let inode = inode.lock();
+fn tmpfs_follow_link(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> StrResult<()> {
+    let inode = dentry.access_inner().d_inode.clone();
+    let inode = inode;
     let number = inode.number;
     let bind = TMP_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
@@ -238,8 +224,8 @@ fn tmpfs_follow_link(dentry: Arc<Mutex<DirEntry>>, lookup_data: &mut LookUpData)
 /// read the contents of a directory
 fn tmpfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
     wwarn!("rootfs_readdir");
-    let inode = file.lock().f_dentry.lock().d_inode.clone();
-    let inode = inode.lock();
+    let inode = file.lock().f_dentry.access_inner().d_inode.clone();
+    let inode = inode;
     let number = inode.number;
     let bind = TMP_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
@@ -249,9 +235,9 @@ fn tmpfs_readdir(file: Arc<Mutex<File>>) -> StrResult<DirContext> {
     Ok(dir_context)
 }
 
-fn tmpfs_rmdir(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
+fn tmpfs_rmdir(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
     wwarn!("rootfs_rmdir");
-    let inode = dir.lock();
+    let inode = dir;
     let number = inode.number;
     let mut bind = TMP_FS.lock();
     let ram_inode = bind.get_mut(&number).unwrap();
@@ -259,7 +245,7 @@ fn tmpfs_rmdir(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResul
     assert!(!ram_inode.data.is_empty());
     // delete the sub dir
     // find name from data
-    let name = dentry.lock().d_name.clone();
+    let name = dentry.access_inner().d_name.clone();
     let index = ram_inode
         .data
         .as_slice()
@@ -268,8 +254,7 @@ fn tmpfs_rmdir(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResul
     ram_inode
         .data
         .splice(index..index + name.len() + 1, "".as_bytes().iter().cloned());
-    let sub_dir = dentry.lock().d_inode.clone();
-    let sub_dir = sub_dir.lock();
+    let sub_dir = dentry.access_inner().d_inode.clone();
     let sub_number = sub_dir.number;
     // delete the sub dir
     bind.remove(&sub_number);
@@ -277,9 +262,9 @@ fn tmpfs_rmdir(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResul
     Ok(())
 }
 
-fn tmpfs_get_attr(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &mut [u8]) -> StrResult<usize> {
-    let inode = dentry.lock().d_inode.clone();
-    let number = inode.lock().number;
+fn tmpfs_get_attr(dentry: Arc<DirEntry>, key: &str, val: &mut [u8]) -> StrResult<usize> {
+    let inode = dentry.access_inner().d_inode.clone();
+    let number = inode.number;
     let bind = TMP_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
     let ex_attr = ram_inode.ex_attr.get(key).unwrap();
@@ -288,25 +273,25 @@ fn tmpfs_get_attr(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &mut [u8]) -> St
     val[..min_len].copy_from_slice(&ex_attr.as_slice()[..min_len]);
     Ok(min_len)
 }
-fn tmpfs_set_attr(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &[u8]) -> StrResult<()> {
-    let inode = dentry.lock().d_inode.clone();
-    let number = inode.lock().number;
+fn tmpfs_set_attr(dentry: Arc<DirEntry>, key: &str, val: &[u8]) -> StrResult<()> {
+    let inode = dentry.access_inner().d_inode.clone();
+    let number = inode.number;
     let mut bind = TMP_FS.lock();
     let ram_inode = bind.get_mut(&number).unwrap();
     ram_inode.ex_attr.insert(key.to_string(), val.to_vec());
     Ok(())
 }
-fn tmpfs_remove_attr(dentry: Arc<Mutex<DirEntry>>, key: &str) -> StrResult<()> {
-    let inode = dentry.lock().d_inode.clone();
-    let number = inode.lock().number;
+fn tmpfs_remove_attr(dentry: Arc<DirEntry>, key: &str) -> StrResult<()> {
+    let inode = dentry.access_inner().d_inode.clone();
+    let number = inode.number;
     let mut bind = TMP_FS.lock();
     let ram_inode = bind.get_mut(&number).unwrap();
     ram_inode.ex_attr.remove(key);
     Ok(())
 }
-fn tmpfs_list_attr(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize> {
-    let inode = dentry.lock().d_inode.clone();
-    let number = inode.lock().number;
+fn tmpfs_list_attr(dentry: Arc<DirEntry>, buf: &mut [u8]) -> StrResult<usize> {
+    let inode = dentry.access_inner().d_inode.clone();
+    let number = inode.number;
     let bind = TMP_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
     let mut attr_list = String::new();
@@ -319,11 +304,11 @@ fn tmpfs_list_attr(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<us
     buf[..min_len].copy_from_slice(&attr_list.as_bytes()[..min_len]);
     Ok(min_len)
 }
-fn tmpfs_truncate(inode: Arc<Mutex<Inode>>) -> StrResult<()> {
-    let number = inode.lock().number;
+fn tmpfs_truncate(inode: Arc<Inode>) -> StrResult<()> {
+    let number = inode.number;
     let mut bind = TMP_FS.lock();
     let ram_inode = bind.get_mut(&number).unwrap();
-    let new_size = inode.lock().file_size;
+    let new_size = inode.access_inner().file_size;
     if new_size > ram_inode.data.len() {
         ram_inode.data.resize(new_size, 0);
     } else {

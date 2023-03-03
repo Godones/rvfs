@@ -28,7 +28,7 @@ pub struct VfsMount {
     /// 设备名
     pub dev_name: String,
     /// 被挂载点的根目录
-    pub root: Arc<Mutex<DirEntry>>,
+    pub root: Arc<DirEntry>,
     /// 本文件系统的超级快对象
     pub super_block: Arc<SuperBlock>,
     inner: Mutex<VfsMountInner>,
@@ -40,7 +40,7 @@ pub struct VfsMountInner {
     /// 父文件系统
     pub parent: Weak<VfsMount>,
     /// 挂载点
-    pub mount_point: Arc<Mutex<DirEntry>>,
+    pub mount_point: Arc<DirEntry>,
 }
 
 impl Debug for VfsMount {
@@ -62,12 +62,12 @@ impl VfsMount {
         Self {
             flag: MountFlags::empty(),
             dev_name: String::new(),
-            root: Arc::new(Mutex::new(DirEntry::empty())),
+            root: Arc::new(DirEntry::empty()),
             super_block: Arc::new(SuperBlock::empty()),
             inner: Mutex::new(VfsMountInner {
                 child: Vec::new(),
                 parent: Weak::new(),
-                mount_point: Arc::new(Mutex::new(DirEntry::empty())),
+                mount_point: Arc::new(DirEntry::empty()),
             }),
         }
     }
@@ -226,9 +226,8 @@ fn check_and_graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResul
     // 或者该安装点是一个符号链接，则释放读写信号量并返回错误
     if new_mount
         .root
-        .lock()
+        .access_inner()
         .d_inode
-        .lock()
         .mode
         .contains(InodeMode::S_SYMLINK)
     {
@@ -246,16 +245,14 @@ fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
     // 被mount的对象也应当(根)目录
     if !look
         .dentry
-        .lock()
+        .access_inner()
         .d_inode
-        .lock()
         .mode
         .contains(InodeMode::S_DIR)
         || !new_mount
             .root
-            .lock()
+            .access_inner()
             .d_inode
-            .lock()
             .mode
             .contains(InodeMode::S_DIR)
     {
@@ -263,9 +260,9 @@ fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
     }
     info!("**graft_tree: check dir ok");
     // 目录被删除了(但是内存中还存在)
-    let dentry = look.dentry.lock();
-    let inode = dentry.d_inode.lock();
-    if inode.flags.contains(InodeFlags::S_DEL) {
+    let dentry = look.dentry.clone();
+    let inode = dentry.access_inner().d_inode.clone();
+    if inode.access_inner().flags.contains(InodeFlags::S_DEL) {
         return Err("inode del");
     }
 
@@ -276,13 +273,13 @@ fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
      */
     drop(inode);
     drop(dentry);
-    // let in_cache = look.dentry.lock().d_flags.contains(DirFlags::IN_HASH);
+    // let in_cache = look.dentry.d_flags.contains(DirFlags::IN_HASH);
     //
     // info!("**graft_tree: check in_cache ok");
 
     // TODO 修改判断挂载点可用的条件
     // let c = look.dentry.clone();
-    // let p = look.dentry.lock().parent.upgrade();
+    // let p = look.dentry.access_inner().parent.upgrade();
     // if Arc::ptr_eq(&c, &p) {
     //     return Err("not in cache");
     // }
@@ -292,7 +289,7 @@ fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
     new_mount.access_inner().mount_point = look.dentry.clone();
     // 加入上级对象的子对象链表中
     look.mnt.inert_child(new_mount);
-    look.dentry.lock().mount_count += 1;
+    look.dentry.access_inner().mount_count += 1;
 
     // info!("parent: {:#?}", look.mnt);
     // info!("child: {:#?}", new_mount);

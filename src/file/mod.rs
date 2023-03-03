@@ -4,7 +4,7 @@ use crate::{
     InodeMode, LookUpData, LookUpFlags, PathType, StrResult,
 };
 use alloc::sync::Arc;
-use log::info;
+use log::{error, info};
 use spin::Mutex;
 
 mod define;
@@ -68,8 +68,9 @@ pub fn vfs_write_file<T: ProcessFs>(
         return Err("file not open for writing");
     }
     // check whether file is valid
-    let inode = file_lock.f_dentry.lock().d_inode.clone();
-    if inode.lock().is_valid() {
+    let inode = file_lock.f_dentry.access_inner().d_inode.clone();
+    if !inode.is_valid() {
+        error!("file is invalid");
         return Err("file is invalid");
     }
 
@@ -91,7 +92,7 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     // 搜索子目录
     let last = lookup_data.last.clone();
     info!("last:{}", last);
-    let inode = lookup_data.dentry.lock().d_inode.clone();
+    let inode = lookup_data.dentry.access_inner().d_inode.clone();
     let dentry = lookup_data.dentry.clone();
     let sub_dentry = find_file_indir(&mut lookup_data, &last);
     if sub_dentry.is_ok() {
@@ -99,14 +100,14 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     }
     info!("create new dir");
     // 调用函数创建一个新的目录
-    let target_dentry = Arc::new(Mutex::new(DirEntry::empty()));
+    let target_dentry = Arc::new(DirEntry::empty());
     // 设置目录名
-    target_dentry.lock().d_name = last;
+    target_dentry.access_inner().d_name = last;
     // 设置父子关系
-    target_dentry.lock().parent = Arc::downgrade(&dentry);
-    let mkdir = inode.lock().inode_ops.mkdir;
+    target_dentry.access_inner().parent = Arc::downgrade(&dentry);
+    let mkdir = inode.inode_ops.mkdir;
     mkdir(inode, target_dentry.clone(), mode)?;
-    dentry.lock().insert_child(target_dentry);
+    dentry.insert_child(target_dentry);
     // TODO dentry 插入全局链表
     Ok(())
 }
@@ -139,8 +140,8 @@ fn construct_file(
 ) -> StrResult<Arc<Mutex<File>>> {
     wwarn!("construct_file");
     let dentry = lookup_data.dentry.clone();
-    let inode = dentry.lock().d_inode.clone();
-    let f_ops = inode.lock().file_ops.clone();
+    let inode = dentry.access_inner().d_inode.clone();
+    let f_ops = inode.file_ops.clone();
     let open = f_ops.open;
     let file = File::new(dentry, lookup_data.mnt.clone(), flags, mode, f_ops);
     let file = Arc::new(Mutex::new(file));
@@ -198,10 +199,10 @@ pub fn open_dentry<T: ProcessFs>(
     let mut lookup_data = path_walk::<T>(name, LookUpFlags::NOLAST)?;
     // 最后一个分量是目录。失败
     if lookup_data.path_type != PathType::PATH_NORMAL {
-        return Err("open_direntry: last path component is a directory");
+        return Err("open_DirEntry: last path component is a directory");
     }
     let dentry = lookup_data.dentry.clone();
-    let inode = dentry.lock().d_inode.clone();
+    let inode = dentry.access_inner().d_inode.clone();
     lookup_data.flags -= LookUpFlags::NOLAST;
     // 获得父目录项
     let last = lookup_data.last.clone();
@@ -216,8 +217,8 @@ pub fn open_dentry<T: ProcessFs>(
     }
 }
 fn __recognize_last<T: ProcessFs>(
-    find: &mut Result<Arc<Mutex<DirEntry>>, &str>,
-    inode: Arc<Mutex<Inode>>,
+    find: &mut Result<Arc<DirEntry>, &str>,
+    inode: Arc<Inode>,
     flags: FileFlags,
     mode: FileMode,
     lookup_data: &mut LookUpData,
@@ -227,17 +228,14 @@ fn __recognize_last<T: ProcessFs>(
     if find.is_err() {
         // 在父目录中创建文件
         // 调用文件系统的回调来创建真实的文件
-        info!("create file in dir {}", lookup_data.dentry.lock().d_name);
-        let create_func = inode.lock().inode_ops.create;
-        let target_dentry = Arc::new(Mutex::new(DirEntry::empty()));
+        info!("create file in dir {}", lookup_data.dentry.access_inner().d_name);
+        let create_func = inode.inode_ops.create;
+        let target_dentry = Arc::new(DirEntry::empty());
         // 设置dentry信息
-        target_dentry.lock().d_name = lookup_data.last.clone();
-        target_dentry.lock().parent = Arc::downgrade(&lookup_data.dentry);
+        target_dentry.access_inner().d_name = lookup_data.last.clone();
+        target_dentry.access_inner().parent = Arc::downgrade(&lookup_data.dentry);
         create_func(inode.clone(), target_dentry.clone(), mode)?;
-        lookup_data
-            .dentry
-            .lock()
-            .insert_child(target_dentry.clone());
+        lookup_data.dentry.insert_child(target_dentry.clone());
 
         lookup_data.dentry = target_dentry;
         let mut flags = flags;
@@ -252,7 +250,7 @@ fn __recognize_last<T: ProcessFs>(
     }
     // 是否挂载了文件系统
     let mut find_dentry = find.as_ref().unwrap().clone();
-    if find_dentry.lock().mount_count > 0 {
+    if find_dentry.access_inner().mount_count > 0 {
         if flags.contains(FileFlags::O_NOFOLLOW) {
             return Err("Don'dentry solve mount file");
         }
@@ -261,9 +259,8 @@ fn __recognize_last<T: ProcessFs>(
     }
     // 处理链接文件
     if find_dentry
-        .lock()
+        .access_inner()
         .d_inode
-        .lock()
         .mode
         .contains(InodeMode::S_SYMLINK)
     {
@@ -271,13 +268,12 @@ fn __recognize_last<T: ProcessFs>(
     }
     // 文件为目录
     if find_dentry
-        .lock()
+        .access_inner()
         .d_inode
-        .lock()
         .mode
         .contains(InodeMode::S_DIR)
     {
-        return Err("open_direntry: file is a directory");
+        return Err("open_DirEntry: file is a directory");
     }
     //TODO
     check_file_flags();
@@ -290,21 +286,21 @@ fn __recognize_last<T: ProcessFs>(
 fn __solve_link_file<T: ProcessFs>(
     flags: FileFlags,
     mode: FileMode,
-    inode: Arc<Mutex<Inode>>,
+    inode: Arc<Inode>,
     lookup_data: &mut LookUpData,
     count: &mut usize,
 ) -> StrResult<()> {
     if flags.contains(FileFlags::O_NOFOLLOW) {
-        return Err("open_direntry: file is a symbolic link");
+        return Err("open_DirEntry: file is a symbolic link");
     }
     lookup_data.flags |= LookUpFlags::NOLAST;
     __advance_link::<T>(lookup_data, lookup_data.dentry.clone())?;
     lookup_data.flags -= LookUpFlags::NOLAST;
     if lookup_data.path_type != PathType::PATH_NORMAL {
-        return Err("open_direntry: file is a directory");
+        return Err("open_DirEntry: file is a directory");
     }
     if *count > T::max_link_count() as usize {
-        return Err("open_direntry: too many symbolic links");
+        return Err("open_DirEntry: too many symbolic links");
     }
     // 前面查找到父目录一级
     // 这里在父目录中查找最后一个文件

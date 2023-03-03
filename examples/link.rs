@@ -50,17 +50,35 @@ fn main() {
 
     println!(
         "/tmp/f1 hard_links: {:#?}",
-        file_f2.lock().f_dentry.lock().d_inode.lock().hard_links
+        file_f2
+            .lock()
+            .f_dentry
+            .access_inner()
+            .d_inode
+            .access_inner()
+            .hard_links
     );
     vfs_unlink::<FakeFSC>("/tmp/f1").unwrap();
     println!(
         "/tmp/f1 hard_links: {:#?}",
-        file_f2.lock().f_dentry.lock().d_inode.lock().hard_links
+        file_f2
+            .lock()
+            .f_dentry
+            .access_inner()
+            .d_inode
+            .access_inner()
+            .hard_links
     );
     vfs_unlink::<FakeFSC>("/tmp/f2").unwrap();
     println!(
         "/tmp/f1 hard_links: {:#?}",
-        file_f2.lock().f_dentry.lock().d_inode.lock().hard_links
+        file_f2
+            .lock()
+            .f_dentry
+            .access_inner()
+            .d_inode
+            .access_inner()
+            .hard_links
     );
     vfs_write_file::<FakeFSC>(file_f2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].as_ref(), 0)
         .is_err()

@@ -7,8 +7,7 @@ use alloc::sync::Arc;
 use alloc::sync::Weak;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-
-use spin::Mutex;
+use spin::{Mutex, MutexGuard};
 
 bitflags! {
     pub struct InodeFlags:u32{
@@ -25,87 +24,123 @@ bitflags! {
 
 #[derive(Debug)]
 pub struct Inode {
-    /// 文件节点编号
+    /// 文件节点编号--文件系统中唯一标识符
     pub number: usize,
-    pub hard_links: u32,
-    pub state: u32,
-    pub flags: InodeFlags,
-    pub uid: u32,
-    pub gid: u32,
+    /// 设备描述符
     pub dev_desc: u32,
+    /// 索引节点操作
     pub inode_ops: InodeOps,
+    /// 文件操作
     pub file_ops: FileOps,
-    /// 如果是块设备
-    pub blk_dev: Option<Arc<Mutex<dyn Device>>>,
+    /// 块设备文件
+    pub blk_dev: Option<Arc<dyn Device>>,
+    /// 块大小
     pub blk_size: u32,
+    /// 索引节点模式
     pub mode: InodeMode,
-    pub file_size: usize,
-    /// 文件的块数量。以512字节为单位
-    pub blk_count: usize,
+    /// 超级块引用
     pub super_blk: Weak<SuperBlock>,
+    inner: Mutex<InodeInner>,
 }
+
+#[derive(Debug)]
+pub struct InodeInner {
+    /// 硬链接数
+    pub hard_links: u32,
+    /// 状态
+    pub flags: InodeFlags,
+    /// 用户id
+    pub uid: u32,
+    /// 组id
+    pub gid: u32,
+    /// 文件大小
+    pub file_size: usize,
+}
+
 impl Inode {
     pub fn empty() -> Self {
         Self {
             number: 0,
-            hard_links: 0,
-            state: 0,
-            flags: InodeFlags::empty(),
-            uid: 0,
-            gid: 0,
             dev_desc: 0,
             inode_ops: InodeOps::empty(),
             file_ops: FileOps::empty(),
             blk_dev: None,
             mode: InodeMode::empty(),
-            file_size: 0,
-            blk_count: 0,
             super_blk: Weak::new(),
             blk_size: 0,
+            inner: Mutex::new(InodeInner {
+                hard_links: 0,
+                flags: InodeFlags::empty(),
+                uid: 0,
+                gid: 0,
+                file_size: 0,
+            }),
         }
     }
+    pub fn new(
+        sb_blk: Arc<SuperBlock>,
+        number: usize,
+        dev_desc: u32,
+        inode_ops: InodeOps,
+        file_ops: FileOps,
+        blk_dev: Option<Arc<dyn Device>>,
+        mode: InodeMode,
+    ) -> Self {
+        let inode = Self {
+            number,
+            dev_desc,
+            inode_ops,
+            file_ops,
+            blk_dev,
+            blk_size: sb_blk.block_size,
+            mode,
+            super_blk: Arc::downgrade(&sb_blk),
+            inner: Mutex::new(InodeInner {
+                hard_links: 0,
+                flags: InodeFlags::S_CACHE,
+                uid: 0,
+                gid: 0,
+                file_size: 0,
+            }),
+        };
+        inode
+    }
+
     pub fn is_valid(&self) -> bool {
-        self.flags == InodeFlags::S_INVALID
+        self.access_inner().flags != InodeFlags::S_INVALID
+    }
+    pub fn access_inner(&self) -> MutexGuard<InodeInner> {
+        self.inner.lock()
     }
 }
 
 pub struct InodeOps {
-    pub follow_link:
-        fn(dentry: Arc<Mutex<DirEntry>>, lookup_data: &mut LookUpData) -> StrResult<()>,
-    pub readlink: fn(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize>,
-    pub lookup: fn(
-        dentry: Arc<Mutex<DirEntry>>,
-        lookup_data: &mut LookUpData,
-    ) -> StrResult<Arc<Mutex<DirEntry>>>,
+    pub follow_link: fn(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> StrResult<()>,
+    pub readlink: fn(dentry: Arc<DirEntry>, buf: &mut [u8]) -> StrResult<usize>,
+    pub lookup: fn(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> StrResult<Arc<DirEntry>>,
     /// 在某一目录下，为与目录项对象相关的普通文件创建一个新的磁盘索引节点。
-    pub create:
-        fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, mode: FileMode) -> StrResult<()>,
+    pub create: fn(dir: Arc<Inode>, dentry: Arc<DirEntry>, mode: FileMode) -> StrResult<()>,
     /// mkdir(dir, dentry, mode)  在某个目录下，为与目录项对应的目录创建一个新的索引节点
-    pub mkdir:
-        fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, mode: FileMode) -> StrResult<()>,
-    pub rmdir: fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()>,
+    pub mkdir: fn(dir: Arc<Inode>, dentry: Arc<DirEntry>, mode: FileMode) -> StrResult<()>,
+    pub rmdir: fn(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()>,
     /// 在某个目录下，创建一个硬链接
-    pub link: fn(
-        old_dentry: Arc<Mutex<DirEntry>>,
-        dir: Arc<Mutex<Inode>>,
-        new_dentry: Arc<Mutex<DirEntry>>,
-    ) -> StrResult<()>,
+    pub link:
+        fn(old_dentry: Arc<DirEntry>, dir: Arc<Inode>, new_dentry: Arc<DirEntry>) -> StrResult<()>,
     /// 在某个目录下，删除一个硬链接
-    pub unlink: fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()>,
+    pub unlink: fn(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()>,
     /// 修改索引节点 inode 所指文件的长度。在调用该方法之前，必须将
     /// inode 对象的 i_size 域设置为需要的新长度值
-    pub truncate: fn(inode: Arc<Mutex<Inode>>) -> StrResult<()>,
-    pub get_attr: fn(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &mut [u8]) -> StrResult<usize>,
-    pub set_attr: fn(dentry: Arc<Mutex<DirEntry>>, key: &str, val: &[u8]) -> StrResult<()>,
-    pub remove_attr: fn(dentry: Arc<Mutex<DirEntry>>, key: &str) -> StrResult<()>,
-    pub list_attr: fn(dentry: Arc<Mutex<DirEntry>>, buf: &mut [u8]) -> StrResult<usize>,
-    pub symlink:
-        fn(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str) -> StrResult<()>,
+    pub truncate: fn(inode: Arc<Inode>) -> StrResult<()>,
+    pub get_attr: fn(dentry: Arc<DirEntry>, key: &str, val: &mut [u8]) -> StrResult<usize>,
+    pub set_attr: fn(dentry: Arc<DirEntry>, key: &str, val: &[u8]) -> StrResult<()>,
+    pub remove_attr: fn(dentry: Arc<DirEntry>, key: &str) -> StrResult<()>,
+    pub list_attr: fn(dentry: Arc<DirEntry>, buf: &mut [u8]) -> StrResult<usize>,
+    pub symlink: fn(dir: Arc<Inode>, dentry: Arc<DirEntry>, target: &str) -> StrResult<()>,
     pub rename: fn(
-        old_dir: Arc<Mutex<Inode>>,
-        old_dentry: Arc<Mutex<DirEntry>>,
-        new_dir: Arc<Mutex<Inode>>,
-        new_dentry: Arc<Mutex<DirEntry>>,
+        old_dir: Arc<Inode>,
+        old_dentry: Arc<DirEntry>,
+        new_dir: Arc<Inode>,
+        new_dentry: Arc<DirEntry>,
     ) -> StrResult<()>,
 }
 impl Debug for InodeOps {
@@ -150,26 +185,28 @@ pub fn simple_statfs(sb_blk: Arc<SuperBlock>) -> StrResult<StatFs> {
 }
 
 /// 创建一个inode
-pub fn create_tmp_inode_from_sb_blk(sb_blk: Arc<SuperBlock>) -> StrResult<Arc<Mutex<Inode>>> {
+pub fn create_tmp_inode_from_sb_blk(
+    sb_blk: Arc<SuperBlock>,
+    number: usize,
+    mode: InodeMode,
+    dev_desc: u32,
+    inode_ops: InodeOps,
+    file_ops: FileOps,
+    blk_dev: Option<Arc<dyn Device>>,
+) -> StrResult<Arc<Inode>> {
     wwarn!("create_tmp_inode_from_sb_blk");
     let create_func = sb_blk.super_block_ops.alloc_inode;
     let res = create_func(sb_blk.clone());
     let inode = match res {
         // 如果文件系统不支持，则需要直接创建
         Ok(inode) => inode,
-        Err("Not support") => Arc::new(Mutex::new(Inode::empty())),
+        Err("Not support") => Arc::new(Inode::new(
+            sb_blk, number, dev_desc, inode_ops, file_ops, blk_dev, mode,
+        )),
         _ => return Err("create inode failed"),
     };
-    let mut inode_lk = inode.lock();
-    // 设置inode的超级块
-    inode_lk.super_blk = Arc::downgrade(&sb_blk);
-    // 设置inode的块大小
-    inode_lk.blk_size = sb_blk.block_size;
-    // 设置inode的块设备
-    inode_lk.blk_dev = sb_blk.device.clone();
     // 设置硬链接数
-    inode_lk.hard_links = 1;
-    drop(inode_lk);
+    inode.access_inner().hard_links = 1;
     wwarn!("create_tmp_inode_from_sb_blk end");
     Ok(inode)
 }

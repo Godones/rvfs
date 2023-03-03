@@ -4,42 +4,42 @@ use crate::inode::InodeMode;
 use crate::{find_file_indir, path_walk, wwarn, InodeFlags, LookUpFlags, PathType, StrResult};
 use alloc::sync::Arc;
 use log::info;
-use spin::Mutex;
+
 /// decrease the hard link count of a file
 /// * name: the path of the file
 pub fn vfs_unlink<T: ProcessFs>(name: &str) -> StrResult<()> {
     // 查找文件
     let mut lookup_data = path_walk::<T>(name, LookUpFlags::NOLAST)?;
     // 判断是否是目录
-    let inode = lookup_data.dentry.lock().d_inode.clone();
+    let inode = lookup_data.dentry.access_inner().d_inode.clone();
     if lookup_data.path_type == PathType::PATH_ROOT {
         return Err("Can not delete root directory");
     }
-    if inode.lock().mode != InodeMode::S_DIR {
+    if inode.mode != InodeMode::S_DIR {
         return Err("It is not a directory");
     }
     // 搜索子目录
     let last = lookup_data.last.clone();
     let dentry = lookup_data.dentry.clone();
-    let inode = dentry.lock().d_inode.clone();
+    let inode = dentry.access_inner().d_inode.clone();
     let sub_dentry = find_file_indir(&mut lookup_data, &last);
     if sub_dentry.is_err() {
         return Err("The file does not exist");
     }
     let (_, sub_dentry) = sub_dentry.unwrap();
     // 判断是否是目录
-    let sub_inode = sub_dentry.lock().d_inode.clone();
-    if sub_inode.lock().mode == InodeMode::S_DIR {
+    let sub_inode = sub_dentry.access_inner().d_inode.clone();
+    if sub_inode.mode == InodeMode::S_DIR {
         return Err("It is a directory");
     }
     // 调用函数删除文件
-    let unlink = inode.lock().inode_ops.unlink;
+    let unlink = inode.inode_ops.unlink;
     unlink(inode.clone(), sub_dentry.clone())?;
 
     // mark the inode as deleted
-    sub_dentry.lock().d_inode.lock().flags = InodeFlags::S_INVALID;
+    sub_dentry.access_inner().d_inode.access_inner().flags = InodeFlags::S_INVALID;
 
-    dentry.lock().remove_child(&last);
+    dentry.remove_child(&last);
 
     Ok(())
 }
@@ -52,8 +52,8 @@ pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
     // 查找old的inode
     let old_lookup_data = path_walk::<T>(old, LookUpFlags::READ_LINK)?;
     // 判断是否是目录
-    let old_inode = old_lookup_data.dentry.lock().d_inode.clone();
-    if old_inode.lock().mode == InodeMode::S_DIR {
+    let old_inode = old_lookup_data.dentry.access_inner().d_inode.clone();
+    if old_inode.mode == InodeMode::S_DIR {
         return Err("It is a directory");
     }
     // 查找new的inode
@@ -78,7 +78,7 @@ pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
     }
 
     let last = new_lookup_data.last.clone();
-    let inode = new_lookup_data.dentry.lock().d_inode.clone();
+    let inode = new_lookup_data.dentry.access_inner().d_inode.clone();
     let dentry = new_lookup_data.dentry.clone();
     // 搜索子目录
     let sub_dentry = find_file_indir(&mut new_lookup_data, &last);
@@ -86,17 +86,16 @@ pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
         return Err("The file already exists");
     }
 
-    let target_dentry = Arc::new(Mutex::new(DirEntry::from_lookup_data(&new_lookup_data)));
-    // error!("vfs_link: target_dentry = {:#?}", target_dentry);
+    let target_dentry = Arc::new(DirEntry::from_lookup_data(&new_lookup_data));
     // 调用函数创建一个链接文件
-    let do_link = inode.lock().inode_ops.link;
+    let do_link = inode.inode_ops.link;
     do_link(
         old_lookup_data.dentry.clone(),
         inode.clone(),
         target_dentry.clone(),
     )?;
     // 确保文件系统完成功能再加入到缓存中
-    dentry.lock().insert_child(target_dentry);
+    dentry.insert_child(target_dentry);
     wwarn!("vfs_link: ok");
     Ok(())
 }

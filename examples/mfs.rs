@@ -83,7 +83,15 @@ fn main() {
     let f2_lookup = path_walk::<FakeFSC>("/f2", LookUpFlags::READ_LINK);
     assert_eq!(f2_lookup.is_err(), true);
     let f1_lookup = path_walk::<FakeFSC>("/f1", LookUpFlags::READ_LINK).unwrap();
-    assert_eq!(f1_lookup.dentry.lock().d_inode.lock().hard_links, 1);
+    assert_eq!(
+        f1_lookup
+            .dentry
+            .access_inner()
+            .d_inode
+            .access_inner()
+            .hard_links,
+        1
+    );
 
     let file_attr = vfs_getattr::<FakeFSC>("/f1").unwrap();
     println!("file_attr: {:#?}", file_attr);

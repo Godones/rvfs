@@ -9,14 +9,14 @@ use alloc::string::ToString;
 use alloc::sync::Arc;
 pub use define::*;
 use log::{error, info};
-use spin::Mutex;
+
 
 /// 当删除物理文件时，释放缓存描述符的引用并将其从哈希表中删除
-pub fn remove_dentry_cache(_dentry: Arc<Mutex<DirEntry>>) {
+pub fn remove_dentry_cache(_dentry: Arc<DirEntry>) {
     unimplemented!()
 }
 /// 在卸载特殊文件系统时，删除所有的缓存节点
-pub fn delete_all_dentry_cache(_root: Arc<Mutex<DirEntry>>) {
+pub fn delete_all_dentry_cache(_root: Arc<DirEntry>) {
     unimplemented!()
 }
 
@@ -63,7 +63,7 @@ fn __generic_load_dentry<T: ProcessFs>(
     }
     // 获取当前路径的inode
     // 开始进一步查找
-    let mut inode = lookup_data.dentry.lock().d_inode.clone();
+    let mut inode = lookup_data.dentry.access_inner().d_inode.clone();
     // 循环处理每一个路径分量
     // 循环处理路径的每一个分量，但不处理最后一部分
     info!("dir_name: {}", dir_name);
@@ -97,7 +97,7 @@ fn __generic_load_dentry<T: ProcessFs>(
                 // 转到上级目录并继续。
                 recede_parent::<T>(&mut lookup_data.mnt, &mut lookup_data.dentry)?;
 
-                inode = lookup_data.dentry.lock().d_inode.clone();
+                inode = lookup_data.dentry.access_inner().d_inode.clone();
                 continue;
             }
         }
@@ -107,18 +107,18 @@ fn __generic_load_dentry<T: ProcessFs>(
         // TODO 向前推进到当前目录最后一个安装点
         // 查找得到的目录可能依次挂载了很多文件系统
         advance_mount(&mut next_mnt, &mut next_dentry)?;
-        inode = next_dentry.lock().d_inode.clone();
+        inode = next_dentry.access_inner().d_inode.clone();
 
         //不是目录也不是符号链接
-        let inode_mode = inode.lock().mode;
+        let inode_mode = inode.mode;
 
         match inode_mode {
             InodeMode::S_SYMLINK => {
                 // 链接文件
                 advance_link::<T>(lookup_data, next_dentry)?;
-                inode = lookup_data.dentry.lock().d_inode.clone();
+                inode = lookup_data.dentry.access_inner().d_inode.clone();
                 // 如果链接文件没有指向目录，那么就不再继续循环
-                if inode.lock().mode != InodeMode::S_DIR {
+                if inode.mode != InodeMode::S_DIR {
                     return Err("file is not link or dir");
                 }
             }
@@ -140,7 +140,7 @@ fn __normal_load_dentry<T: ProcessFs>(
     lookup_data: &mut LookUpData,
     lookup_flags: LookUpFlags,
     dir: &str,
-    inode: Arc<Mutex<Inode>>,
+    inode: Arc<Inode>,
 ) -> StrResult<()> {
     iinfo!("__normal_load_dentry");
     // 不解析最后一个文件名
@@ -167,7 +167,7 @@ fn __normal_load_dentry<T: ProcessFs>(
     } else if dir == ".." {
         // 尝试回到父目录
         recede_parent::<T>(&mut lookup_data.mnt, &mut lookup_data.dentry)?;
-        inode = lookup_data.dentry.lock().d_inode.clone();
+        inode = lookup_data.dentry.access_inner().d_inode.clone();
         return Ok(());
     }
     // 在当前目录中搜索下一个分量。
@@ -178,10 +178,10 @@ fn __normal_load_dentry<T: ProcessFs>(
     advance_mount(&mut next_mnt, &mut next_dentry)?;
 
     // 如果是一个符号链接并且需要读取链接文件
-    if lookup_flags.contains(LookUpFlags::READ_LINK) && inode.lock().mode == InodeMode::S_SYMLINK {
+    if lookup_flags.contains(LookUpFlags::READ_LINK) && inode.mode == InodeMode::S_SYMLINK {
         // 处理链接文件
         advance_link::<T>(lookup_data, next_dentry.clone())?;
-        inode = lookup_data.dentry.lock().d_inode.clone();
+        inode = lookup_data.dentry.access_inner().d_inode.clone();
     } else {
         // 普通目录对象
         info!("普通目录对象");
@@ -190,7 +190,7 @@ fn __normal_load_dentry<T: ProcessFs>(
     }
     // 要求最后一个文件必须是目录
     // 例如cd进入目录的情况，或者最后一个字符是/
-    if lookup_flags.contains(LookUpFlags::DIRECTORY) && inode.lock().mode != InodeMode::S_DIR {
+    if lookup_flags.contains(LookUpFlags::DIRECTORY) && inode.mode != InodeMode::S_DIR {
         return Err("file is not dir");
     }
     Ok(())
@@ -201,7 +201,7 @@ fn __end_with_slashes<T: ProcessFs>(
     lookup_data: &mut LookUpData,
     lookup_flags: LookUpFlags,
     dir: &str,
-    inode: Arc<Mutex<Inode>>,
+    inode: Arc<Inode>,
 ) -> StrResult<()> {
     // 文件名最后一个字符是"/
     // 因此必须解析符号链接，并要求最终指向目录
@@ -214,7 +214,7 @@ fn __end_with_slashes<T: ProcessFs>(
 /// 需要注意的是，如果当前目录是一个安装点，那么需要回退到父目录的安装点
 fn recede_parent<T: ProcessFs>(
     mnt: &mut Arc<VfsMount>,
-    dentry: &mut Arc<Mutex<DirEntry>>,
+    dentry: &mut Arc<DirEntry>,
 ) -> StrResult<()> {
     let mut t_mnt = mnt.clone();
     let mut t_dentry = dentry.clone();
@@ -229,7 +229,7 @@ fn recede_parent<T: ProcessFs>(
         }
         // 如果当前目录不是所在文件系统的根目录，那么需要回退
         if !Arc::ptr_eq(&t_dentry, &t_mnt.root) {
-            let parent = t_dentry.lock().parent.clone().upgrade().unwrap();
+            let parent = t_dentry.access_inner().parent.clone().upgrade().unwrap();
             t_dentry = parent;
             break;
         }
@@ -252,10 +252,10 @@ fn recede_parent<T: ProcessFs>(
 pub fn find_file_indir(
     lookup_data: &mut LookUpData,
     name: &str,
-) -> StrResult<(Arc<VfsMount>, Arc<Mutex<DirEntry>>)> {
+) -> StrResult<(Arc<VfsMount>, Arc<DirEntry>)> {
     wwarn!("find_file_indir");
     // 检查是否是在目录下查找
-    if !lookup_data.dentry.lock().d_inode.lock().mode == InodeMode::S_DIR {
+    if !lookup_data.dentry.access_inner().d_inode.mode == InodeMode::S_DIR {
         return Err("not a dir");
     }
     // 先在缓存中搜索，看看文件是否存在
@@ -263,7 +263,7 @@ pub fn find_file_indir(
     // 在缓存中没有找到
     // 必须在块设备上找一找了
     if dentry.is_err() {
-        // let inode = lookup_data.dentry.lock().d_inode.clone();
+        // let inode = lookup_data.dentry.access_inner().d_inode.clone();
         // 获取文件节点锁
         // 调用文件系统的回调，从设备上装载文件节点
         dentry = __find_file_from_device(lookup_data, name);
@@ -279,14 +279,13 @@ pub fn find_file_indir(
 }
 
 /// 在缓存中搜索文件
-fn __find_in_cache(dentry: Arc<Mutex<DirEntry>>, name: &str) -> StrResult<Arc<Mutex<DirEntry>>> {
+fn __find_in_cache(dentry: Arc<DirEntry>, name: &str) -> StrResult<Arc<DirEntry>> {
     // TODO 使用map保存而不是vec
     wwarn!("__find_in_cache");
     let dentry = dentry;
-    let dentry_lock = dentry.lock();
-    let _comp_func = dentry_lock.d_ops.d_compare;
-    for child in dentry_lock.children.iter() {
-        let sub_name = child.lock().d_name.clone();
+    let _comp_func = dentry.d_ops.d_compare;
+    for child in dentry.access_inner().children.iter() {
+        let sub_name = child.access_inner().d_name.clone();
         info!("find file in cache: {}", sub_name.as_str());
         // if comp_func
         // TODO deadlock in comp_func
@@ -303,10 +302,7 @@ fn __find_in_cache(dentry: Arc<Mutex<DirEntry>>, name: &str) -> StrResult<Arc<Mu
  * 如果文件不存在，在缓存中创建一个缓存项
  * 调用者必须持有目录锁
  */
-fn __find_file_from_device(
-    lookup_data: &mut LookUpData,
-    name: &str,
-) -> StrResult<Arc<Mutex<DirEntry>>> {
+fn __find_file_from_device(lookup_data: &mut LookUpData, name: &str) -> StrResult<Arc<DirEntry>> {
     iinfo!("__find_file_from_device");
     // 先在节点缓存中搜索
     let dentry = __find_in_cache(lookup_data.dentry.clone(), name);
@@ -314,20 +310,17 @@ fn __find_file_from_device(
         return dentry;
     }
     // 缓存中不存在
-    let inode = lookup_data.dentry.lock().d_inode.clone();
-    let lookup_func = inode.lock().inode_ops.lookup;
+    let inode = lookup_data.dentry.access_inner().d_inode.clone();
+    let lookup_func = inode.inode_ops.lookup;
     iinfo!("__find_file_from_device end");
     lookup_func(lookup_data.dentry.clone(), lookup_data)
 }
 
 /// 找到当前目录的最后一个挂载点
 /// 并切换到该挂载点
-pub fn advance_mount(
-    mnt: &mut Arc<VfsMount>,
-    next_dentry: &mut Arc<Mutex<DirEntry>>,
-) -> StrResult<()> {
+pub fn advance_mount(mnt: &mut Arc<VfsMount>, next_dentry: &mut Arc<DirEntry>) -> StrResult<()> {
     wwarn!("advance_mount");
-    let mut mount_count = next_dentry.lock().mount_count;
+    let mut mount_count = next_dentry.access_inner().mount_count;
     let mut t_mnt = mnt.clone();
     let mut t_dentry = next_dentry.clone();
     // info!("dentry:{:#?}", t_dentry);
@@ -340,7 +333,7 @@ pub fn advance_mount(
         info!("step into next mount point");
         t_mnt = child_mnt.unwrap();
         t_dentry = t_mnt.root.clone();
-        mount_count = t_dentry.lock().mount_count;
+        mount_count = t_dentry.access_inner().mount_count;
     }
     *mnt = t_mnt;
     *next_dentry = t_dentry;
@@ -349,7 +342,7 @@ pub fn advance_mount(
 }
 
 /// 在当前挂载点中查找子挂载点
-fn lookup_mount(mnt: Arc<VfsMount>, next_dentry: Arc<Mutex<DirEntry>>) -> StrResult<Arc<VfsMount>> {
+fn lookup_mount(mnt: Arc<VfsMount>, next_dentry: Arc<DirEntry>) -> StrResult<Arc<VfsMount>> {
     let global_vfsmount_lock = GLOBAL_HASH_MOUNT.read();
     global_vfsmount_lock
         .iter()
@@ -368,7 +361,7 @@ fn lookup_mount(mnt: Arc<VfsMount>, next_dentry: Arc<Mutex<DirEntry>>) -> StrRes
 /// * `lookup_data` - 查找数据
 pub fn advance_link<T: ProcessFs>(
     lookup_data: &mut LookUpData,
-    dentry: Arc<Mutex<DirEntry>>,
+    dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
     // 进程需要检查嵌套层数
     if T::check_nested_link() {
@@ -382,9 +375,9 @@ pub fn advance_link<T: ProcessFs>(
 /// 符号链接查找，不考虑嵌套计数
 pub fn __advance_link<T: ProcessFs>(
     lookup_data: &mut LookUpData,
-    dentry: Arc<Mutex<DirEntry>>,
+    dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
-    let follow_link = dentry.lock().d_inode.lock().inode_ops.follow_link;
+    let follow_link = dentry.access_inner().d_inode.inode_ops.follow_link;
     follow_link(dentry, lookup_data)?;
     let target_name = lookup_data.symlink_names.last().unwrap().clone();
     // 检查符号链接是否以'/'开头
@@ -429,28 +422,28 @@ pub fn vfs_rmdir<T: ProcessFs>(dir_name: &str) -> StrResult<()> {
     }
     info!("mnt is writable");
     let dentry = lookup_data.dentry;
-    let parent = dentry.lock().parent.upgrade().unwrap();
-    let parent_inode = parent.lock().d_inode.clone();
+    let parent = dentry.access_inner().parent.upgrade().unwrap();
+    let parent_inode = parent.access_inner().d_inode.clone();
     may_delete(parent_inode.clone(), dentry.clone(), true)?;
 
     // mount point
-    let mount = dentry.lock().mount_count;
+    let mount = dentry.access_inner().mount_count;
     if mount > 0 {
         return Err("can't remove mount point");
     }
     // ensure dir is empty
-    let inode = dentry.lock().d_inode.clone();
-    let dir_size = inode.lock().file_size;
+    let inode = dentry.access_inner().d_inode.clone();
+    let dir_size = inode.access_inner().file_size;
     if dir_size > 0 {
         return Err("directory not empty");
     }
 
-    let rmdir = parent_inode.lock().inode_ops.rmdir;
+    let rmdir = parent_inode.inode_ops.rmdir;
     // remove from parent dentry
-    let name = dentry.lock().d_name.clone();
-    parent.lock().remove_child(name.as_str());
+    let name = dentry.access_inner().d_name.clone();
+    parent.remove_child(name.as_str());
     // set inode with del flag
-    dentry.lock().d_inode.lock().flags = InodeFlags::S_DEL;
+    dentry.access_inner().d_inode.access_inner().flags = InodeFlags::S_DEL;
     rmdir(parent_inode, dentry)?;
     wwarn!("vfs_rmdir end");
     Ok(())
@@ -476,43 +469,39 @@ pub fn vfs_rmdir<T: ProcessFs>(dir_name: &str) -> StrResult<()> {
  *     nfs_async_unlink().
  */
 /// check whether we can delete a find in dir
-pub fn may_delete(
-    dir: Arc<Mutex<Inode>>,
-    dentry: Arc<Mutex<DirEntry>>,
-    isdir: bool,
-) -> StrResult<()> {
+pub fn may_delete(dir: Arc<Inode>, dentry: Arc<DirEntry>, isdir: bool) -> StrResult<()> {
     wwarn!("may_delete");
-    let mode = dir.lock().mode;
+    let mode = dir.mode;
     if mode != InodeMode::S_DIR {
         return Err("not a directory");
     }
-    if dentry.lock().d_inode.lock().flags == InodeFlags::S_INVALID {
+    if dentry.access_inner().d_inode.access_inner().flags == InodeFlags::S_INVALID {
         return Err("invalid dir");
     }
     if isdir {
-        if dentry.lock().d_inode.lock().mode != InodeMode::S_DIR {
+        if dentry.access_inner().d_inode.mode != InodeMode::S_DIR {
             return Err("not a directory");
         }
         // root
-        let parent = dentry.lock().parent.upgrade().unwrap();
+        let parent = dentry.access_inner().parent.upgrade().unwrap();
         if Arc::ptr_eq(&parent, &dentry) {
             return Err("can't remove root directory");
         }
-    } else if dentry.lock().d_inode.lock().mode == InodeMode::S_DIR {
+    } else if dentry.access_inner().d_inode.mode == InodeMode::S_DIR {
         return Err("is a directory");
     }
     wwarn!("may_delete end");
     Ok(())
 }
 
-pub fn may_create(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrResult<()> {
+pub fn may_create(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
     wwarn!("may_create");
-    let mode = dir.lock().mode;
+    let mode = dir.mode;
     if mode != InodeMode::S_DIR {
         return Err("not a directory");
     }
     // root
-    let parent = dentry.lock().parent.upgrade().unwrap();
+    let parent = dentry.access_inner().parent.upgrade().unwrap();
     if Arc::ptr_eq(&parent, &dentry) {
         return Err("can't create root directory");
     }
@@ -525,7 +514,7 @@ pub fn may_create(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>) -> StrRe
 pub fn vfs_truncate<T: ProcessFs>(file_name: &str, len: usize) -> StrResult<()> {
     wwarn!("vfs_truncate");
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
-    let inode = lookup_data.dentry.lock().d_inode.clone();
+    let inode = lookup_data.dentry.access_inner().d_inode.clone();
     if is_dir(inode.clone()) {
         return Err("is a directory");
     }
@@ -535,16 +524,16 @@ pub fn vfs_truncate<T: ProcessFs>(file_name: &str, len: usize) -> StrResult<()> 
     // ignore permission
 
     // modify the inode file_size
-    inode.lock().file_size = len;
-    let truncate = inode.lock().inode_ops.truncate;
+    inode.access_inner().file_size = len;
+    let truncate = inode.inode_ops.truncate;
     truncate(inode)?;
     wwarn!("vfs_truncate end");
     Ok(())
 }
 
 #[inline(always)]
-pub fn is_dir(inode: Arc<Mutex<Inode>>) -> bool {
-    inode.lock().mode == InodeMode::S_DIR
+pub fn is_dir(inode: Arc<Inode>) -> bool {
+    inode.mode == InodeMode::S_DIR
 }
 
 /// rename a file
@@ -584,7 +573,7 @@ pub fn vfs_rename<T: ProcessFs>(old_name: &str, new_name: &str) -> StrResult<()>
         return Err("can't rename a file to itself");
     }
 
-    if !is_dir(old_sub_dentry.lock().d_inode.clone()) {
+    if !is_dir(old_sub_dentry.access_inner().d_inode.clone()) {
         // if the file name ends with '/', it means we want to rename a directory
         // TODO(lookup_data should do)
     }
@@ -596,53 +585,50 @@ pub fn vfs_rename<T: ProcessFs>(old_name: &str, new_name: &str) -> StrResult<()>
         Err(_) => {
             // a fake dentry
             info!("make a fake dentry");
-            let mut dentry = DirEntry::empty();
-            dentry.d_name = new_lookup_data.last.clone();
-            dentry.parent = Arc::downgrade(&new_dentry);
-            dentry.d_ops = old_sub_dentry.lock().d_ops.clone();
-            dentry.d_inode.lock().mode = old_sub_dentry.lock().d_inode.lock().mode;
-            Arc::new(Mutex::new(dentry))
+            let mut dentry = DirEntry::with_inode_mode(old_sub_dentry.access_inner().d_inode.mode);
+            dentry.access_inner().d_name = new_lookup_data.last.clone();
+            dentry.access_inner().parent = Arc::downgrade(&new_dentry);
+            dentry.d_ops = old_sub_dentry.d_ops.clone();
+            Arc::new(dentry)
         }
     };
     error!("path walk over");
 
-    let old_inode = old_dentry.lock().d_inode.clone();
+    let old_inode = old_dentry.access_inner().d_inode.clone();
     // the old_dentry may be equal to new_dentry
     do_internal_rename(
         old_inode,
         old_sub_dentry.clone(),
-        new_dentry.lock().d_inode.clone(),
+        new_dentry.access_inner().d_inode.clone(),
         new_sub_dentry.clone(),
     )?;
     // after rename, the old dentry is invalid
     // so we need to update the old dentry
-    let mut old_sub_dentry = old_sub_dentry.lock();
-    let new_sub_dentry = new_sub_dentry.lock();
-    old_sub_dentry.d_name = new_sub_dentry.d_name.clone();
-    old_sub_dentry.parent = new_sub_dentry.parent.clone();
+    old_sub_dentry.access_inner().d_name = new_sub_dentry.access_inner().d_name.clone();
+    old_sub_dentry.access_inner().parent = new_sub_dentry.access_inner().parent.clone();
     wwarn!("vfs_rename end");
     Ok(())
 }
 
 fn do_internal_rename(
-    old_dir: Arc<Mutex<Inode>>,
-    old_dentry: Arc<Mutex<DirEntry>>,
-    new_dir: Arc<Mutex<Inode>>,
-    new_dentry: Arc<Mutex<DirEntry>>,
+    old_dir: Arc<Inode>,
+    old_dentry: Arc<DirEntry>,
+    new_dir: Arc<Inode>,
+    new_dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
     wwarn!("do_internal_rename");
-    let is_dir = is_dir(old_dentry.lock().d_inode.clone());
-    let old_inode = old_dentry.lock().d_inode.clone();
-    let new_inode = new_dentry.lock().d_inode.clone();
+    let is_dir = is_dir(old_dentry.access_inner().d_inode.clone());
+    let old_inode = old_dentry.access_inner().d_inode.clone();
+    let new_inode = new_dentry.access_inner().d_inode.clone();
     if Arc::ptr_eq(&old_inode, &new_inode) {
         return Err("can't rename a file to itself");
     }
 
-    info!("old_dentry: {:?}", old_dentry.lock().d_name);
+    info!("old_dentry: {:?}", old_dentry.access_inner().d_name);
     may_delete(old_dir.clone(), old_dentry.clone(), is_dir)?;
 
-    info!("new_dentry: {:?}", new_dentry.lock().d_name);
-    if new_dentry.lock().d_inode.lock().flags == InodeFlags::S_INVALID {
+    info!("new_dentry: {:?}", new_dentry.access_inner().d_name);
+    if new_dentry.access_inner().d_inode.access_inner().flags == InodeFlags::S_INVALID {
         // if the file doesn't exist, we need to create it
         may_create(new_dir.clone(), new_dentry.clone())?;
     } else {
@@ -659,28 +645,28 @@ fn do_internal_rename(
 }
 
 fn vfs_rename_other(
-    old_dir: Arc<Mutex<Inode>>,
-    old_dentry: Arc<Mutex<DirEntry>>,
-    new_dir: Arc<Mutex<Inode>>,
-    new_dentry: Arc<Mutex<DirEntry>>,
+    old_dir: Arc<Inode>,
+    old_dentry: Arc<DirEntry>,
+    new_dir: Arc<Inode>,
+    new_dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
     wwarn!("vfs_rename_other start");
     // do somthing that i dont know
-    let rename = old_dir.lock().inode_ops.rename;
+    let rename = old_dir.inode_ops.rename;
     rename(old_dir, old_dentry, new_dir, new_dentry)?;
     wwarn!("vfs_rename_other end");
     Ok(())
 }
 
 fn vfs_rename_dir(
-    old_dir: Arc<Mutex<Inode>>,
-    old_dentry: Arc<Mutex<DirEntry>>,
-    new_dir: Arc<Mutex<Inode>>,
-    new_dentry: Arc<Mutex<DirEntry>>,
+    old_dir: Arc<Inode>,
+    old_dentry: Arc<DirEntry>,
+    new_dir: Arc<Inode>,
+    new_dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
     wwarn!("vfs_rename_dir start");
     // do somthing that i dont know
-    let rename = old_dir.lock().inode_ops.rename;
+    let rename = old_dir.inode_ops.rename;
     rename(old_dir, old_dentry, new_dir, new_dentry)?;
     wwarn!("vfs_rename_dir end");
     Ok(())

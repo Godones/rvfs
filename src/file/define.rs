@@ -5,7 +5,7 @@ use core::fmt::{Debug, Formatter};
 use spin::Mutex;
 
 pub struct File {
-    pub f_dentry: Arc<Mutex<DirEntry>>,
+    pub f_dentry: Arc<DirEntry>,
     // 含有该文件的已经安装的文件系统
     pub f_mnt: Arc<VfsMount>,
     // 文件操作
@@ -34,7 +34,7 @@ impl Debug for File {
 
 impl File {
     pub fn new(
-        dentry: Arc<Mutex<DirEntry>>,
+        dentry: Arc<DirEntry>,
         mnt: Arc<VfsMount>,
         flags: FileFlags,
         mode: FileMode,
@@ -99,12 +99,8 @@ pub struct FileOps {
     /// 系统调用ioctl提供了一种执行设备特殊命令的方法(如格式化软盘的某个磁道，这既不是读也不是写操作)。
     //另外，内核还能识别一部分ioctl命令，而不必调用fops表中的ioctl。如果设备不提供ioctl入口点，
     // 则对于任何内核未预先定义的请求，ioctl系统调用将返回错误(-ENOTYY)
-    pub ioctl: fn(
-        dentry: Arc<Mutex<Inode>>,
-        file: Arc<Mutex<File>>,
-        cmd: u32,
-        arg: u64,
-    ) -> StrResult<isize>,
+    pub ioctl:
+        fn(dentry: Arc<Inode>, file: Arc<Mutex<File>>, cmd: u32, arg: u64) -> StrResult<isize>,
     pub mmap: fn(file: Arc<Mutex<File>>, vma: VmArea) -> StrResult<()>,
     pub open: fn(file: Arc<Mutex<File>>) -> StrResult<()>,
     pub flush: fn(file: Arc<Mutex<File>>) -> StrResult<()>,

@@ -1,82 +1,103 @@
-use crate::{Inode, VfsMount};
+use crate::{Inode, InodeMode, VfsMount};
 use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use spin::Mutex;
+use spin::{Mutex, MutexGuard};
 bitflags! {
     pub struct DirFlags:u32{
         const IN_HASH = 0x1;
     }
 }
-
+#[derive(Debug)]
 pub struct DirEntry {
     pub d_flags: DirFlags,
-    /// 指向一个inode对象
-    pub d_inode: Arc<Mutex<Inode>>,
-    /// 父节点
-    pub parent: Weak<Mutex<DirEntry>>,
     pub d_ops: DirEntryOps,
-    pub d_name: String,
-    pub children: Vec<Arc<Mutex<DirEntry>>>,
-    pub mount_count: u32,
+    inner: Mutex<DirEntryInner>,
 }
 
-impl Debug for DirEntry {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("DirEntry")
-            .field("d_flags", &self.d_flags)
-            .field("d_inode", &self.d_inode)
-            .field("parent", &self.parent)
-            .field("d_ops", &self.d_ops)
-            .field("d_name", &self.d_name)
-            .field("children", &self.children)
-            .field("mount_count", &self.mount_count)
-            .finish()
-    }
+#[derive(Debug)]
+pub struct DirEntryInner {
+    pub d_name: String,
+    pub parent: Weak<DirEntry>,
+    pub children: Vec<Arc<DirEntry>>,
+    pub mount_count: u32,
+    pub d_inode: Arc<Inode>,
 }
 
 impl DirEntry {
     pub fn empty() -> Self {
         DirEntry {
             d_flags: DirFlags::empty(),
-            d_inode: Arc::new(Mutex::new(Inode::empty())),
-            parent: Weak::new(),
             d_ops: DirEntryOps::empty(),
-            d_name: String::new(),
-            children: Vec::new(),
-            mount_count: 0,
+            inner: Mutex::new(DirEntryInner {
+                d_name: String::new(),
+                parent: Weak::new(),
+                children: Vec::new(),
+                mount_count: 0,
+                d_inode: Arc::new(Inode::empty()),
+            }),
         }
     }
-    pub fn new(inode: Arc<Mutex<Inode>>, parent: Weak<Mutex<DirEntry>>, name: &str) -> Self {
+    pub fn access_inner(&self) -> MutexGuard<DirEntryInner> {
+        self.inner.lock()
+    }
+    pub fn with_inode_mode(mode: InodeMode) -> Self {
+        let mut inode = Inode::empty();
+        inode.mode = mode;
         DirEntry {
             d_flags: DirFlags::empty(),
-            d_inode: inode,
-            parent,
             d_ops: DirEntryOps::empty(),
-            d_name: name.to_string(),
-            children: Vec::new(),
-            mount_count: 0,
+            inner: Mutex::new(DirEntryInner {
+                d_name: String::new(),
+                parent: Weak::new(),
+                children: Vec::new(),
+                mount_count: 0,
+                d_inode: Arc::new(inode),
+            }),
         }
     }
-    pub fn insert_child(&mut self, child: Arc<Mutex<DirEntry>>) {
-        self.children.push(child);
+    pub fn new(
+        d_flags: DirFlags,
+        inode: Arc<Inode>,
+        dir_ops: DirEntryOps,
+        parent: Weak<DirEntry>,
+        name: &str,
+    ) -> Self {
+        DirEntry {
+            d_flags,
+            d_ops:dir_ops,
+            inner: Mutex::new(DirEntryInner {
+                d_name: name.to_string(),
+                parent,
+                children: vec![],
+                mount_count: 0,
+                d_inode: inode,
+            }),
+        }
     }
-    pub fn remove_child(&mut self, child_name: &str) {
-        self.children.retain(|x| !x.lock().d_name.eq(child_name));
+    pub fn insert_child(&self, child: Arc<DirEntry>) {
+        self.access_inner().children.push(child);
+    }
+    pub fn remove_child(&self, child_name: &str) {
+        self.access_inner()
+            .children
+            .retain(|x| !x.access_inner().d_name.eq(child_name));
     }
     pub fn from_lookup_data(data: &LookUpData) -> Self {
         let parent = data.dentry.clone();
         DirEntry {
             d_flags: DirFlags::empty(),
-            d_inode: Arc::new(Mutex::new(Inode::empty())),
-            parent: Arc::downgrade(&parent),
             d_ops: DirEntryOps::empty(),
-            d_name: data.last.clone(),
-            children: Vec::new(),
-            mount_count: 0,
+            inner: Mutex::new(DirEntryInner {
+                parent: Arc::downgrade(&parent),
+                d_name: data.last.clone(),
+                children: vec![],
+                mount_count: 0,
+                d_inode: Arc::new(Inode::empty()),
+            }),
         }
     }
 }
@@ -86,13 +107,13 @@ unsafe impl Sync for DirEntry {}
 
 #[derive(Clone)]
 pub struct DirEntryOps {
-    pub d_hash: fn(dentry: Arc<Mutex<DirEntry>>, name: &str) -> usize,
-    pub d_compare: fn(dentry: Arc<Mutex<DirEntry>>, name1: &str, name2: &str) -> bool,
-    pub d_delete: fn(dentry: Arc<Mutex<DirEntry>>),
+    pub d_hash: fn(dentry: Arc<DirEntry>, name: &str) -> usize,
+    pub d_compare: fn(dentry: Arc<DirEntry>, name1: &str, name2: &str) -> bool,
+    pub d_delete: fn(dentry: Arc<DirEntry>),
     /// 默认什么都不做
-    pub d_release: fn(dentry: Arc<Mutex<DirEntry>>),
+    pub d_release: fn(dentry: Arc<DirEntry>),
     /// 丢弃目录项对应的索引节点
-    pub d_iput: fn(dentry: Arc<Mutex<DirEntry>>, inode: Arc<Mutex<Inode>>),
+    pub d_iput: fn(dentry: Arc<DirEntry>, inode: Arc<Inode>),
 }
 
 impl Debug for DirEntryOps {
@@ -174,7 +195,7 @@ pub struct LookUpData {
     /// 查找标志
     pub flags: LookUpFlags,
     ///  查找到的目录对象
-    pub dentry: Arc<Mutex<DirEntry>>,
+    pub dentry: Arc<DirEntry>,
     /// 已经安装的文件系统对象
     pub mnt: Arc<VfsMount>,
     /// 路径名最后一个分量的类型。如PATHTYPE_NORMAL
@@ -186,7 +207,7 @@ pub struct LookUpData {
 }
 
 impl LookUpData {
-    pub fn new(flags: LookUpFlags, dentry: Arc<Mutex<DirEntry>>, mnt: Arc<VfsMount>) -> Self {
+    pub fn new(flags: LookUpFlags, dentry: Arc<DirEntry>, mnt: Arc<VfsMount>) -> Self {
         Self {
             last: "".to_string(),
             name: "".to_string(),
@@ -198,7 +219,7 @@ impl LookUpData {
             symlink_names: vec![],
         }
     }
-    pub fn update_dentry(&mut self, dentry: Arc<Mutex<DirEntry>>) {
+    pub fn update_dentry(&mut self, dentry: Arc<DirEntry>) {
         self.dentry = dentry;
     }
     pub fn update_mnt(&mut self, mnt: Arc<VfsMount>) {

@@ -1,22 +1,22 @@
 use crate::dentry::DirEntry;
 use crate::VfsMount;
 use alloc::sync::Arc;
-use spin::Mutex;
+
 
 /// 进程需要提供的信息
 ///
 /// 由于vfs模块与内核模块分离了，所以需要进程提供一些信息
 pub struct ProcessFsInfo {
     pub root_mount: Arc<VfsMount>,
-    pub root_dir: Arc<Mutex<DirEntry>>,
-    pub current_dir: Arc<Mutex<DirEntry>>,
+    pub root_dir: Arc<DirEntry>,
+    pub current_dir: Arc<DirEntry>,
     pub current_mount: Arc<VfsMount>,
 }
 impl ProcessFsInfo {
     pub fn new(
         root_mount: Arc<VfsMount>,
-        root_dir: Arc<Mutex<DirEntry>>,
-        current_dir: Arc<Mutex<DirEntry>>,
+        root_dir: Arc<DirEntry>,
+        current_dir: Arc<DirEntry>,
         current_mount: Arc<VfsMount>,
     ) -> ProcessFsInfo {
         ProcessFsInfo {
@@ -35,6 +35,7 @@ pub trait ProcessFs {
     // 更新进程链接文件的相关数据： 嵌套查询深度/ 调用链接查找的次数
     fn update_link_data();
     fn max_link_count() -> u32;
+    fn current_time() -> VfsTime;
 }
 
 #[derive(Default, Debug, Clone)]
@@ -45,4 +46,17 @@ pub struct VfsTime {
     pub hour: u8,
     pub minute: u8,
     pub second: u8,
+}
+
+impl VfsTime {
+    pub fn new(year: u32, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> VfsTime {
+        VfsTime {
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+        }
+    }
 }

@@ -6,7 +6,7 @@ use alloc::borrow::ToOwned;
 
 use alloc::sync::Arc;
 use log::info;
-use spin::Mutex;
+
 
 /// create a symlink
 /// * target: the target of the symlink
@@ -33,19 +33,19 @@ pub fn vfs_symlink<T: ProcessFs>(target: &str, link: &str) -> StrResult<()> {
         return Err("The file already exists");
     }
 
-    let target_dentry = Arc::new(Mutex::new(DirEntry::from_lookup_data(&new_lookup_data)));
-    let dir = new_lookup_data.dentry.lock().d_inode.clone();
+    let target_dentry = Arc::new(DirEntry::from_lookup_data(&new_lookup_data));
+    let dir = new_lookup_data.dentry.access_inner().d_inode.clone();
     let dentry = new_lookup_data.dentry.clone();
     do_symlink(dir, target_dentry.clone(), target)?;
-    dentry.lock().insert_child(target_dentry);
+    dentry.insert_child(target_dentry);
     wwarn!("vfs_symlink: end");
     Ok(())
 }
 
-fn do_symlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str) -> StrResult<()> {
+fn do_symlink(dir: Arc<Inode>, dentry: Arc<DirEntry>, target: &str) -> StrResult<()> {
     wwarn!("do_symlink");
     may_create(dir.clone(), dentry.clone())?;
-    let fs_symlink = dir.lock().inode_ops.symlink;
+    let fs_symlink = dir.inode_ops.symlink;
     fs_symlink(dir, dentry, target)?;
     wwarn!("do_symlink: end");
     Ok(())
@@ -53,12 +53,12 @@ fn do_symlink(dir: Arc<Mutex<Inode>>, dentry: Arc<Mutex<DirEntry>>, target: &str
 
 /// Check whether we can create an object with dentry child in directory dir.
 #[inline]
-fn may_create(dir: Arc<Mutex<Inode>>, child: Arc<Mutex<DirEntry>>) -> StrResult<()> {
+fn may_create(dir: Arc<Inode>, child: Arc<DirEntry>) -> StrResult<()> {
     wwarn!("may_create");
-    if child.lock().d_inode.lock().mode != InodeMode::empty() {
+    if child.access_inner().d_inode.mode != InodeMode::empty() {
         return Err("The file already exists");
     }
-    if dir.lock().mode != InodeMode::S_DIR {
+    if dir.mode != InodeMode::S_DIR {
         return Err("It is not a directory");
     }
     // if dir.lock().uid != 0 && dir.lock().uid != child.lock().uid {
@@ -72,11 +72,11 @@ pub fn vfs_readlink<T: ProcessFs>(path: &str, buf: &mut [u8]) -> StrResult<usize
     wwarn!("vfs_readlink");
     let lookup_data = path_walk::<T>(path, LookUpFlags::empty())?;
     let dentry = lookup_data.dentry.clone();
-    let inode = lookup_data.dentry.lock().d_inode.clone();
-    let mode = inode.lock().mode;
+    let inode = lookup_data.dentry.access_inner().d_inode.clone();
+    let mode = inode.mode;
     let len = match mode {
         InodeMode::S_SYMLINK => {
-            let readlink = inode.lock().inode_ops.readlink;
+            let readlink = inode.inode_ops.readlink;
             readlink(dentry, buf)?
         }
         _ => {

@@ -19,7 +19,7 @@ pub type DevDesc = u32;
 pub struct SuperBlock {
     /// 块设备描述符
     pub dev_desc: DevDesc,
-    pub device: Option<Arc<Mutex<dyn Device>>>,
+    pub device: Option<Arc<dyn Device>>,
     /// 块大小
     pub block_size: u32,
     /// 超级快是否脏
@@ -43,13 +43,13 @@ pub struct SuperBlock {
 #[derive(Debug)]
 pub struct SuperBlockInner {
     /// 脏inode
-    pub dirty_inode: Vec<Arc<Mutex<Inode>>>,
+    pub dirty_inode: Vec<Arc<Inode>>,
     /// 需要同步到磁盘的inode
-    pub sync_inode: Vec<Arc<Mutex<Inode>>>,
+    pub sync_inode: Vec<Arc<Inode>>,
     /// 打开的文件对象
     pub files: Vec<Arc<Mutex<File>>>,
     /// 文件系统根节点
-    pub root: Arc<Mutex<DirEntry>>,
+    pub root: Arc<DirEntry>,
 }
 
 impl SuperBlock {
@@ -70,7 +70,7 @@ impl SuperBlock {
                 dirty_inode: Vec::new(),
                 sync_inode: Vec::new(),
                 files: Vec::new(),
-                root: Arc::new(Mutex::new(DirEntry::empty())),
+                root: Arc::new(DirEntry::empty()),
             }),
         }
     }
@@ -80,10 +80,10 @@ impl SuperBlock {
 }
 
 impl SuperBlock {
-    pub fn insert_dirty_inode(&self, inode: Arc<Mutex<Inode>>) {
+    pub fn insert_dirty_inode(&self, inode: Arc<Inode>) {
         self.access_inner().dirty_inode.push(inode);
     }
-    pub fn insert_sync_inode(&self, inode: Arc<Mutex<Inode>>) {
+    pub fn insert_sync_inode(&self, inode: Arc<Inode>) {
         self.access_inner().sync_inode.push(inode);
     }
     pub fn insert_file(&self, file: Arc<Mutex<File>>) {
@@ -92,12 +92,12 @@ impl SuperBlock {
     pub fn remove_file(&self, file: Arc<Mutex<File>>) {
         self.access_inner().files.retain(|f| !Arc::ptr_eq(f, &file));
     }
-    pub fn remove_inode(&self, inode: Arc<Mutex<Inode>>) {
+    pub fn remove_inode(&self, inode: Arc<Inode>) {
         let mut inner = self.inner.lock();
         inner.dirty_inode.retain(|i| !Arc::ptr_eq(i, &inode));
         inner.sync_inode.retain(|i| !Arc::ptr_eq(i, &inode));
     }
-    pub fn update_root(&self, root: Arc<Mutex<DirEntry>>) {
+    pub fn update_root(&self, root: Arc<DirEntry>) {
         self.access_inner().root = root;
     }
 }
@@ -112,13 +112,13 @@ pub trait Device: Debug {
 pub trait DataOps: Debug {}
 
 pub struct SuperBlockOps {
-    pub alloc_inode: fn(super_blk: Arc<SuperBlock>) -> StrResult<Arc<Mutex<Inode>>>,
+    pub alloc_inode: fn(super_blk: Arc<SuperBlock>) -> StrResult<Arc<Inode>>,
     /// Writes the given inode to disk
-    pub write_inode: fn(inode: Arc<Mutex<Inode>>, flag: u32) -> StrResult<()>,
+    pub write_inode: fn(inode: Arc<Inode>, flag: u32) -> StrResult<()>,
     /// Makes the given inode dirty
-    pub dirty_inode: fn(inode: Arc<Mutex<Inode>>) -> StrResult<()>,
+    pub dirty_inode: fn(inode: Arc<Inode>) -> StrResult<()>,
     /// Deletes the given inode from the disk
-    pub delete_inode: fn(inode: Arc<Mutex<Inode>>) -> StrResult<()>,
+    pub delete_inode: fn(inode: Arc<Inode>) -> StrResult<()>,
     /// Writes the given SuperBlock to disk
     pub write_super: fn(super_blk: Arc<SuperBlock>) -> StrResult<()>,
     /// Synchronizes filesystem metadata with the on-disk filesystem
@@ -188,7 +188,32 @@ impl Debug for FileSystemType {
             .finish()
     }
 }
+type F1 = fn(
+    fs_type: Arc<FileSystemType>,
+    flags: MountFlags,
+    dev_name: &str,
+    data: Option<Box<dyn DataOps>>,
+) -> StrResult<Arc<SuperBlock>>;
+
+type F2 = fn(super_blk: Arc<SuperBlock>);
+
 impl FileSystemType {
+    pub const fn new(
+        name: &'static str,
+        fs_attr: FileSystemAttr,
+        get_super_blk: F1,
+        kill_super_blk: F2,
+    ) -> Self {
+        FileSystemType {
+            name,
+            fs_flags: fs_attr,
+            get_super_blk,
+            kill_super_blk,
+            inner: Mutex::new(FileSystemTypeInner {
+                super_blk_s: Vec::new(),
+            }),
+        }
+    }
     pub fn access_inner(&self) -> MutexGuard<FileSystemTypeInner> {
         self.inner.lock()
     }

@@ -82,7 +82,7 @@ fn create_simple_ram_super_blk(
             dirty_inode: vec![],
             sync_inode: vec![],
             files: vec![],
-            root: Arc::new(Mutex::new(DirEntry::empty())),
+            root: Arc::new(DirEntry::empty()),
         }),
         blk_dev_name: dev_name.to_string(),
         data,
@@ -123,80 +123,67 @@ fn ramfs_create_root_inode(
     inode_ops: InodeOps,
     file_ops: FileOps,
     number: usize,
-) -> StrResult<Arc<Mutex<Inode>>> {
-    let inode = create_tmp_inode_from_sb_blk(sb_blk)?;
-    let mut inode_lk = inode.lock();
-    inode_lk.mode = mode;
-    inode_lk.blk_count = 0;
+) -> StrResult<Arc<Inode>> {
+    let inode = create_tmp_inode_from_sb_blk(sb_blk, 0, mode, 0, inode_ops, file_ops, None)?;
     // 设置inode的编号
     assert_eq!(number, 0);
-    inode_lk.number = number;
+    inode.access_inner().hard_links = 0;
     // TODO 设置uid/gid
-    match mode {
-        InodeMode::S_DIR => {
-            inode_lk.inode_ops = inode_ops;
-            inode_lk.file_ops = file_ops;
-            inode_lk.hard_links += 1
-        }
-        _ => panic!("root inode must be dir"),
-    }
-    drop(inode_lk);
     // 插入根inode
     let mut ram_inode = RamFsInode::new(mode, FileMode::FMODE_WRITE, 0);
-    ram_inode.hard_links -= 1;
+    ram_inode.hard_links = 0;
     fs.lock().insert(0, ram_inode);
     Ok(inode)
 }
 
 fn ramfs_create_root_dentry(
-    parent: Option<Arc<Mutex<DirEntry>>>,
-    inode: Arc<Mutex<Inode>>,
-) -> StrResult<Arc<Mutex<DirEntry>>> {
-    let mut dentry = DirEntry::empty();
+    parent: Option<Arc<DirEntry>>,
+    inode: Arc<Inode>,
+) -> StrResult<Arc<DirEntry>> {
+    let dentry = DirEntry::empty();
     assert!(parent.is_none());
-    dentry.d_inode = inode;
-    dentry.d_name = "/".to_string();
-    Ok(Arc::new(Mutex::new(dentry)))
+    dentry.access_inner().d_inode = inode;
+    dentry.access_inner().d_name = "/".to_string();
+    Ok(Arc::new(dentry))
 }
 
 fn ramfs_create_inode(
     fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
-    dir: Arc<Mutex<Inode>>,
+    dir: Arc<Inode>,
     mode: InodeMode,
     attr: FileMode,
     number: usize,
     inode_ops: InodeOps,
     file_ops: FileOps,
     name: String,
-) -> StrResult<Arc<Mutex<Inode>>> {
+) -> StrResult<Arc<Inode>> {
     wwarn!("ramfs_create_inode");
     // 创建raminode
     let ram_inode = RamFsInode::new(mode, attr, number);
     fs.lock().insert(number, ram_inode.clone());
 
     // 根据ramfs的inode创建inode
-    let sb_blk = dir.lock().super_blk.upgrade().unwrap();
-    // 创建inode
-    let inode = create_tmp_inode_from_sb_blk(sb_blk)?;
-    let mut inode_lock = inode.lock();
-    // 根据raminode 设置inode的属性
-    inode_lock.number = ram_inode.number;
-    inode_lock.hard_links = ram_inode.hard_links;
-    inode_lock.mode = ram_inode.mode;
-    inode_lock.inode_ops = inode_ops;
-    // TODO 根据文件类型设置inode的操作
-    inode_lock.file_ops = file_ops;
-    inode_lock.file_size = ram_inode.data.len();
-    drop(inode_lock);
+    let sb_blk = dir.super_blk.upgrade().unwrap();
+    // 创建inode根据raminode 设置inode的属性
+    let inode = create_tmp_inode_from_sb_blk(
+        sb_blk,
+        ram_inode.number,
+        ram_inode.mode,
+        0,
+        inode_ops,
+        file_ops,
+        None,
+    )?;
+    inode.access_inner().hard_links = ram_inode.hard_links;
+    inode.access_inner().file_size = ram_inode.data.len();
     // 在父目录中写入目录项
-    let mut dir_lock = dir.lock();
-    let dir_number = dir_lock.number;
+    let dir_number = dir.number;
     let mut bind = fs.lock();
     let ram_inode = bind.get_mut(&dir_number).unwrap();
     let old = ram_inode.dentries.insert(name, number);
     assert!(old.is_none());
-    dir_lock.file_size = ram_inode.dentries.len();
-    drop(dir_lock);
+    dir.access_inner().file_size = ram_inode.dentries.len();
+    drop(dir);
     wwarn!("ramfs_create_inode end");
     Ok(inode)
 }
@@ -207,8 +194,8 @@ fn ramfs_create_inode(
 /// * attr: 目录的属性
 fn ramfs_mkdir(
     fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
-    dir: Arc<Mutex<Inode>>,
-    dentry: Arc<Mutex<DirEntry>>,
+    dir: Arc<Inode>,
+    dentry: Arc<DirEntry>,
     attr: FileMode,
     number: usize,
     inode_ops: InodeOps,
@@ -223,9 +210,9 @@ fn ramfs_mkdir(
         number,
         inode_ops,
         file_ops,
-        dentry.lock().d_name.clone(),
+        dentry.access_inner().d_name.clone(),
     )?;
-    dentry.lock().d_inode = inode;
+    dentry.access_inner().d_inode = inode;
     wwarn!("ramfs_mkdir end");
     Ok(())
 }
@@ -233,8 +220,8 @@ fn ramfs_mkdir(
 /// 创建内存文件系统的文件并返回目录项
 fn ramfs_create(
     fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
-    dir: Arc<Mutex<Inode>>,
-    dentry: Arc<Mutex<DirEntry>>,
+    dir: Arc<Inode>,
+    dentry: Arc<DirEntry>,
     mode: FileMode,
     number: usize,
     inode_ops: InodeOps,
@@ -249,9 +236,9 @@ fn ramfs_create(
         number,
         inode_ops,
         file_ops,
-        dentry.lock().d_name.clone(),
+        dentry.access_inner().d_name.clone(),
     )?;
-    dentry.lock().d_inode = inode;
+    dentry.access_inner().d_inode = inode;
     wwarn!("rootfs_create end");
     Ok(())
 }
@@ -263,9 +250,9 @@ fn ramfs_read_file(
     offset: u64,
 ) -> StrResult<usize> {
     let dentry = &mut file.lock().f_dentry;
-    let inode = &mut dentry.lock().d_inode;
+    let inode = &mut dentry.access_inner().d_inode;
     // 获取inode的编号
-    let number = inode.lock().number;
+    let number = inode.number;
     let mut binding = fs.lock();
     let ram_inode = binding.get_mut(&number).unwrap();
     let read_len = core::cmp::min(
@@ -290,12 +277,16 @@ fn ramfs_write_file(
 ) -> StrResult<usize> {
     wwarn!("ramfs_write_file");
     let dentry = &mut file.lock().f_dentry;
-    let inode = &mut dentry.lock().d_inode;
+    let inode = &mut dentry.access_inner().d_inode;
     // 获取inode的编号
-    let number = inode.lock().number;
+    let number = inode.number;
     info!("number: {}", number);
     let mut binding = fs.lock();
-    let ram_inode = binding.get_mut(&number).unwrap();
+    let ram_inode = binding.get_mut(&number);
+    if ram_inode.is_none() {
+        return Err("ramfs_write_file: ram_inode is none");
+    }
+    let ram_inode = ram_inode.unwrap();
     if offset as usize + buf.len() > ram_inode.data.len() {
         ram_inode.data.resize(offset as usize + buf.len(), 0);
     }
@@ -311,63 +302,60 @@ fn ramfs_write_file(
 
 fn ramfs_link(
     fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
-    old_dentry: Arc<Mutex<DirEntry>>,
-    dir: Arc<Mutex<Inode>>,
-    new_dentry: Arc<Mutex<DirEntry>>,
+    old_dentry: Arc<DirEntry>,
+    dir: Arc<Inode>,
+    new_dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
     wwarn!("ramfs_link");
-    let old_inode = old_dentry.lock().d_inode.clone();
-    let mut old_inode_lock = old_inode.lock();
-    old_inode_lock.hard_links += 1;
-    let inode_number = old_inode_lock.number;
+    let old_inode = old_dentry.access_inner().d_inode.clone();
+    old_inode.access_inner().hard_links += 1;
+    let inode_number = old_inode.number;
     let mut binding = fs.lock();
     let ram_inode = binding.get_mut(&inode_number).unwrap();
     ram_inode.hard_links += 1;
 
-    drop(old_inode_lock);
-    new_dentry.lock().d_inode = old_inode;
-    let mut dir_lock = dir.lock();
+    new_dentry.access_inner().d_inode = old_inode;
+    let dir_lock = dir;
     assert_eq!(dir_lock.mode, InodeMode::S_DIR);
 
     // create a new inode
     let number = dir_lock.number;
     let ram_inode = binding.get_mut(&number).unwrap();
-    let name = new_dentry.lock().d_name.clone();
+    let name = new_dentry.access_inner().d_name.clone();
     ram_inode.dentries.insert(name, inode_number);
-    dir_lock.file_size = ram_inode.dentries.len();
+    dir_lock.access_inner().file_size = ram_inode.dentries.len();
     wwarn!("ramfs_link end");
     Ok(())
 }
 
 fn ramfs_unlink(
     fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
-    dir: Arc<Mutex<Inode>>,
-    dentry: Arc<Mutex<DirEntry>>,
+    dir: Arc<Inode>,
+    dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
     wwarn!("ramfs_unlink");
-    let mut dir_lock = dir.lock();
-    assert_eq!(dir_lock.mode, InodeMode::S_DIR);
-    let name = dentry.lock().d_name.clone();
+    assert_eq!(dir.mode, InodeMode::S_DIR);
+    let name = dentry.access_inner().d_name.clone();
 
-    let inode = dentry.lock().d_inode.clone();
-    let mut inode_lock = inode.lock();
-    inode_lock.hard_links -= 1;
+    let inode = dentry.access_inner().d_inode.clone();
+    let inode_lock = inode;
+    inode_lock.access_inner().hard_links -= 1;
 
     let number = inode_lock.number;
     let mut binding = fs.lock();
     let ram_inode = binding.get_mut(&number).unwrap();
     ram_inode.hard_links -= 1;
 
-    if inode_lock.hard_links == 0 {
+    if inode_lock.access_inner().hard_links == 0 {
         assert_eq!(ram_inode.hard_links, 0);
         binding.remove(&number);
     }
 
     // delete dentry and update dir size
-    let dir_number = dir_lock.number;
+    let dir_number = dir.number;
     let dir_ram_inode = binding.get_mut(&dir_number).unwrap();
     dir_ram_inode.dentries.remove(&name);
-    dir_lock.file_size = dir_ram_inode.dentries.len();
+    dir.access_inner().file_size = dir_ram_inode.dentries.len();
 
     wwarn!("ramfs_unlink end");
     Ok(())
@@ -377,8 +365,8 @@ fn ramfs_symlink(
     fs: Arc<Mutex<HashMap<usize, RamFsInode>>>,
     mode: FileMode,
     number: usize,
-    dir: Arc<Mutex<Inode>>,
-    dentry: Arc<Mutex<DirEntry>>,
+    dir: Arc<Inode>,
+    dentry: Arc<DirEntry>,
     target: &str,
     inode_ops: InodeOps,
     file_ops: FileOps,
@@ -392,13 +380,13 @@ fn ramfs_symlink(
         number,
         inode_ops,
         file_ops,
-        dentry.lock().d_name.clone(),
+        dentry.access_inner().d_name.clone(),
     )?;
     let mut fs_lk = fs.lock();
     let ram_inode = fs_lk.get_mut(&number).unwrap();
     ram_inode.data.extend_from_slice(target.as_bytes());
-    inode.lock().file_size = target.len();
-    dentry.lock().d_inode = inode;
+    inode.access_inner().file_size = target.len();
+    dentry.access_inner().d_inode = inode;
     wwarn!("ramfs_symlink end");
     Ok(())
 }

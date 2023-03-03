@@ -15,7 +15,7 @@ mod superblock;
 
 extern crate alloc;
 extern crate log;
-use crate::info::{ProcessFs, ProcessFsInfo};
+use crate::info::{ProcessFs, ProcessFsInfo, VfsTime};
 use crate::ramfs::rootfs::root_fs_type;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -39,7 +39,7 @@ lazy_static! {
 }
 
 lazy_static! {
-    pub static ref GLOBAL_DIRENTRY: RwLock<Vec<Arc<Mutex<DirEntry>>>> = RwLock::new(Vec::new());
+    pub static ref GLOBAL_DIR_ENTRY: RwLock<Vec<Arc<DirEntry>>> = RwLock::new(Vec::new());
 }
 lazy_static! {
     pub static ref GLOBAL_HASH_MOUNT: RwLock<Vec<Arc<VfsMount>>> = RwLock::new(Vec::new());
@@ -75,9 +75,9 @@ pub fn init_vfs() {
 
 pub struct ProcessFsContext {
     /// 当前工作目录
-    pub cwd: Arc<Mutex<DirEntry>>,
+    pub cwd: Arc<DirEntry>,
     /// 根目录
-    pub root: Arc<Mutex<DirEntry>>,
+    pub root: Arc<DirEntry>,
     /// 当前挂载点
     pub cmnt: Arc<VfsMount>,
     /// 根挂载点
@@ -86,8 +86,8 @@ pub struct ProcessFsContext {
 
 lazy_static! {
     pub static ref PROCESS_FS_CONTEXT: Mutex<ProcessFsContext> = Mutex::new(ProcessFsContext {
-        cwd: Arc::new(Mutex::new(DirEntry::empty())),
-        root: Arc::new(Mutex::new(DirEntry::empty())),
+        cwd: Arc::new(DirEntry::empty()),
+        root: Arc::new(DirEntry::empty()),
         cmnt: Arc::new(VfsMount::empty()),
         rmnt: Arc::new(VfsMount::empty()),
     });
@@ -111,6 +111,10 @@ impl ProcessFs for FakeFSC {
     fn update_link_data() {}
     fn max_link_count() -> u32 {
         0
+    }
+
+    fn current_time() -> VfsTime {
+        VfsTime::new(0, 0, 0, 0, 0, 0)
     }
 }
 
