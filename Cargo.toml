@@ -2,6 +2,14 @@
 name = "rvfs"
 version = "0.1.0"
 edition = "2021"
+readme = "README.md"
+repository = "https://github.com/Godones/rvfs"
+license = "MIT"
+authors = ["Godones <chenlinfeng25@outlook.com>"]
+description = "A virtual file system for rust"
+keywords = ["vfs", "virtual file system", "rust"]
+categories = ["filesystems::virtual"]
+documentation = "https://docs.rs/rvfs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
