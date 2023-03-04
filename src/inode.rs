@@ -1,13 +1,12 @@
 use crate::dentry::{DirEntry, LookUpData};
 use crate::file::{FileMode, FileOps};
-use crate::superblock::{Device, SuperBlock};
-use crate::{wwarn, StatFs, StrResult};
 use alloc::string::ToString;
-use alloc::sync::Arc;
-use alloc::sync::Weak;
+use alloc::sync::{Arc,Weak};
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use spin::{Mutex, MutexGuard};
+use crate::{StrResult, wwarn};
+use crate::superblock::{Device, StatFs, SuperBlock};
 
 bitflags! {
     pub struct InodeFlags:u32{

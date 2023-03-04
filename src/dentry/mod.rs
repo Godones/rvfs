@@ -1,14 +1,12 @@
 mod define;
-
-use crate::info::ProcessFs;
-use crate::{
-    iinfo, mnt_want_write, wwarn, Inode, InodeFlags, InodeMode, StrResult, VfsMount,
-    GLOBAL_HASH_MOUNT,
-};
 use alloc::string::ToString;
 use alloc::sync::Arc;
 pub use define::*;
 use log::{error, info};
+use crate::info::ProcessFs;
+use crate::{GLOBAL_HASH_MOUNT, iinfo, StrResult, wwarn};
+use crate::inode::{Inode, InodeFlags, InodeMode};
+use crate::mount::{mnt_want_write, VfsMount};
 
 
 /// 当删除物理文件时，释放缓存描述符的引用并将其从哈希表中删除
@@ -373,7 +371,7 @@ pub fn advance_link<T: ProcessFs>(
     Ok(())
 }
 /// 符号链接查找，不考虑嵌套计数
-pub fn __advance_link<T: ProcessFs>(
+fn __advance_link<T: ProcessFs>(
     lookup_data: &mut LookUpData,
     dentry: Arc<DirEntry>,
 ) -> StrResult<()> {

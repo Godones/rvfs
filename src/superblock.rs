@@ -5,12 +5,10 @@ use crate::mount::MountFlags;
 use crate::{StrResult, ALL_FS};
 use alloc::boxed::Box;
 use alloc::string::String;
-use alloc::sync::Arc;
-use alloc::sync::Weak;
+use alloc::sync::{Arc,Weak};
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-
 use spin::{Mutex, MutexGuard};
 
 pub type DevDesc = u32;
@@ -52,7 +50,19 @@ pub struct SuperBlockInner {
     pub root: Arc<DirEntry>,
 }
 
+impl SuperBlockInner {
+    pub fn empty()->Self{
+        Self{
+            dirty_inode: Vec::new(),
+            sync_inode: Vec::new(),
+            files: Vec::new(),
+            root: Arc::new(DirEntry::empty()),
+        }
+    }
+}
+
 impl SuperBlock {
+    #[doc(hidden)]
     pub fn empty() -> Self {
         Self {
             dev_desc: 0,
@@ -66,12 +76,7 @@ impl SuperBlock {
             super_block_ops: SuperBlockOps::empty(),
             blk_dev_name: String::new(),
             data: None,
-            inner: Mutex::new(SuperBlockInner {
-                dirty_inode: Vec::new(),
-                sync_inode: Vec::new(),
-                files: Vec::new(),
-                root: Arc::new(DirEntry::empty()),
-            }),
+            inner: Mutex::new(SuperBlockInner::empty()),
         }
     }
     pub fn access_inner(&self) -> MutexGuard<SuperBlockInner> {
@@ -108,8 +113,12 @@ unsafe impl Send for SuperBlock {}
 pub trait Device: Debug {
     fn read(&self, buf: &mut [u8], offset: usize) -> Result<usize, ()>;
     fn write(&self, buf: &[u8], offset: usize) -> Result<usize, ()>;
+    fn flush(&self);
 }
-pub trait DataOps: Debug {}
+pub trait DataOps:Debug {
+    fn device(&self,name:&str)->Arc<dyn Device>;
+    fn data(&self)->*const u8;
+}
 
 pub struct SuperBlockOps {
     pub alloc_inode: fn(super_blk: Arc<SuperBlock>) -> StrResult<Arc<Inode>>,

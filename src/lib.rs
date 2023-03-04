@@ -3,34 +3,30 @@
 #![no_std]
 //! virtual file system framework
 
-mod dentry;
-mod file;
-mod info;
-mod inode;
-mod link;
-mod mount;
+// use dentry::
+pub mod dentry;
+pub mod file;
+pub mod info;
+pub mod inode;
+pub mod link;
+pub mod mount;
 pub mod ramfs;
-mod stat;
-mod superblock;
+pub mod stat;
+pub mod superblock;
+
 
 extern crate alloc;
 extern crate log;
-use crate::info::{ProcessFs, ProcessFsInfo, VfsTime};
-use crate::ramfs::rootfs::root_fs_type;
+use info::{ProcessFs, ProcessFsInfo, VfsTime};
+use ramfs::rootfs::root_fs_type;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-pub use dentry::*;
-pub use file::*;
-pub use inode::*;
 use lazy_static::lazy_static;
 pub use log::{info, warn};
 use spin::{Mutex, RwLock};
-
-pub use link::*;
-pub use mount::*;
-
-pub use stat::*;
-pub use superblock::*;
+use crate::dentry::DirEntry;
+use crate::mount::{do_kernel_mount, MountFlags, VfsMount};
+use crate::superblock::{register_filesystem,SuperBlock,FileSystemType};
 
 pub type StrResult<T> = Result<T, &'static str>;
 

@@ -1,4 +1,3 @@
-use crate::{Inode, InodeMode, VfsMount};
 use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
@@ -6,6 +5,8 @@ use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use spin::{Mutex, MutexGuard};
+use crate::inode::{Inode, InodeMode};
+use crate::mount::VfsMount;
 bitflags! {
     pub struct DirFlags:u32{
         const IN_HASH = 0x1;

@@ -1,14 +1,12 @@
+mod define;
 use crate::info::ProcessFs;
-use crate::{
-    __advance_link, advance_mount, find_file_indir, path_walk, wwarn, DirContext, DirEntry, Inode,
-    InodeMode, LookUpData, LookUpFlags, PathType, StrResult,
-};
 use alloc::sync::Arc;
 use log::{error, info};
-
-
-mod define;
 pub use define::*;
+use crate::{StrResult, wwarn};
+use crate::dentry::{advance_link, advance_mount, DirContext, DirEntry, find_file_indir, LookUpData, LookUpFlags, path_walk, PathType};
+use crate::inode::{Inode, InodeMode};
+
 /// 打开文件
 /// * name:文件名
 /// * flags: 访问模式
@@ -78,7 +76,7 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     wwarn!("vfs_mkdir");
     let lookup_data = path_walk::<T>(name, LookUpFlags::NOLAST);
     if lookup_data.is_err() {
-        return Err("Can'dentry find father dir");
+        return Err("Can't find father dir");
     }
     let mut lookup_data = lookup_data.unwrap();
     if lookup_data.path_type != PathType::PATH_NORMAL {
@@ -248,7 +246,7 @@ fn __recognize_last<T: ProcessFs>(
     let mut find_dentry = find.as_ref().unwrap().clone();
     if find_dentry.access_inner().mount_count > 0 {
         if flags.contains(FileFlags::O_NOFOLLOW) {
-            return Err("Don'dentry solve mount file");
+            return Err("Don't dentry solve mount file");
         }
         advance_mount(&mut lookup_data.mnt, &mut find_dentry)?;
         lookup_data.dentry = find_dentry.clone();
@@ -290,7 +288,7 @@ fn __solve_link_file<T: ProcessFs>(
         return Err("open_DirEntry: file is a symbolic link");
     }
     lookup_data.flags |= LookUpFlags::NOLAST;
-    __advance_link::<T>(lookup_data, lookup_data.dentry.clone())?;
+    advance_link::<T>(lookup_data, lookup_data.dentry.clone())?;
     lookup_data.flags -= LookUpFlags::NOLAST;
     if lookup_data.path_type != PathType::PATH_NORMAL {
         return Err("open_DirEntry: file is a directory");

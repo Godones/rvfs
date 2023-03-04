@@ -1,7 +1,7 @@
-use rvfs::{
-    init_vfs, vfs_getattr, vfs_getxattr, vfs_listxattr, vfs_mkdir, vfs_open_file, vfs_removexattr,
-    vfs_setxattr, vfs_truncate, FakeFSC, FileFlags, FileMode,
-};
+use rvfs::file::{FileFlags, FileMode, vfs_mkdir, vfs_open_file};
+use rvfs::{FakeFSC, init_vfs};
+use rvfs::dentry::vfs_truncate;
+use rvfs::stat::{vfs_getattr, vfs_getxattr, vfs_listxattr, vfs_removexattr, vfs_setxattr};
 
 fn main() {
     env_logger::init();

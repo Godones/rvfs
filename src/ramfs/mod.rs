@@ -1,23 +1,18 @@
 pub mod rootfs;
 pub mod tmpfs;
-
-use crate::dentry::DirEntry;
-use crate::file::FileOps;
-use crate::inode::{create_tmp_inode_from_sb_blk, simple_statfs, Inode, InodeMode, InodeOps};
-use crate::superblock::{FileSystemType, SuperBlock};
-use crate::{
-    find_super_blk, wwarn, DataOps, File, FileMode, LookUpData, MountFlags, StrResult,
-    SuperBlockInner, SuperBlockOps,
-};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
-use alloc::vec;
 use alloc::vec::Vec;
 use hashbrown::HashMap;
-
 use log::info;
 use spin::Mutex;
+use crate::file::{File, FileMode, FileOps};
+use crate::inode::{create_tmp_inode_from_sb_blk, Inode, InodeMode, InodeOps, simple_statfs};
+use crate::mount::MountFlags;
+use crate::{StrResult, wwarn};
+use crate::dentry::{DirEntry, LookUpData};
+use crate::superblock::{DataOps, FileSystemType, find_super_blk, SuperBlock, SuperBlockInner, SuperBlockOps};
 
 #[derive(Clone)]
 pub struct RamFsInode {
@@ -77,13 +72,7 @@ fn create_simple_ram_super_blk(
         magic: RAM_MAGIC,
         file_system_type: Arc::downgrade(&fs_type),
         super_block_ops: RAMFS_SB_OPS,
-
-        inner: Mutex::new(SuperBlockInner {
-            dirty_inode: vec![],
-            sync_inode: vec![],
-            files: vec![],
-            root: Arc::new(DirEntry::empty()),
-        }),
+        inner: Mutex::new(SuperBlockInner::empty()),
         blk_dev_name: dev_name.to_string(),
         data,
     };

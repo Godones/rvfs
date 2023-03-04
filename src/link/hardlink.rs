@@ -1,9 +1,9 @@
-use crate::dentry::DirEntry;
+use crate::dentry::{DirEntry, find_file_indir, LookUpFlags, path_walk, PathType};
 use crate::info::ProcessFs;
-use crate::inode::InodeMode;
-use crate::{find_file_indir, path_walk, wwarn, InodeFlags, LookUpFlags, PathType, StrResult};
+use crate::inode::{InodeFlags, InodeMode};
 use alloc::sync::Arc;
 use log::info;
+use crate::{StrResult, wwarn};
 
 /// decrease the hard link count of a file
 /// * name: the path of the file

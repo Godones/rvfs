@@ -1,9 +1,11 @@
+use rvfs::file::{FileFlags, FileMode, vfs_mkdir, vfs_open_file, vfs_read_file, vfs_write_file};
+use rvfs::{FakeFSC, init_vfs};
+use rvfs::dentry::{LookUpFlags, path_walk};
+use rvfs::link::{vfs_link, vfs_symlink, vfs_unlink};
+use rvfs::mount::{do_mount, MountFlags};
 use rvfs::ramfs::tmpfs::tmp_fs_type;
-use rvfs::{
-    do_mount, init_vfs, path_walk, register_filesystem, vfs_getattr, vfs_link, vfs_mkdir,
-    vfs_open_file, vfs_read_file, vfs_symlink, vfs_unlink, vfs_write_file, FakeFSC, FileFlags,
-    FileMode, LookUpFlags, MountFlags,
-};
+use rvfs::stat::vfs_getattr;
+use rvfs::superblock::register_filesystem;
 
 fn main() {
     env_logger::init();

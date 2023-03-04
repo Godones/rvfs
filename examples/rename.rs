@@ -1,7 +1,6 @@
-use rvfs::{
-    init_vfs, vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_rename, vfs_write_file,
-    FakeFSC, FileFlags, FileMode,
-};
+use rvfs::dentry::vfs_rename;
+use rvfs::{FakeFSC, init_vfs};
+use rvfs::file::{FileFlags, FileMode, vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file};
 
 fn main() {
     env_logger::init();

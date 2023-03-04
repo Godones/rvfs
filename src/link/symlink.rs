@@ -1,11 +1,10 @@
-use crate::dentry::DirEntry;
+use crate::dentry::{DirEntry, find_file_indir, LookUpFlags, path_walk, PathType};
 use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeMode};
-use crate::{find_file_indir, path_walk, wwarn, LookUpFlags, PathType, StrResult};
 use alloc::borrow::ToOwned;
-
 use alloc::sync::Arc;
 use log::info;
+use crate::{StrResult, wwarn};
 
 
 /// create a symlink

@@ -1,8 +1,11 @@
-use crate::{DirContext, DirEntry, Inode, StrResult, VfsMount};
 use alloc::sync::Arc;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use spin::Mutex;
+use crate::dentry::{DirContext, DirEntry};
+use crate::inode::Inode;
+use crate::mount::VfsMount;
+use crate::StrResult;
 
 pub struct File {
     pub f_dentry: Arc<DirEntry>,

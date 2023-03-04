@@ -1,8 +1,10 @@
 use crate::info::{ProcessFs, VfsTime};
 use crate::inode::{Inode, InodeMode};
-use crate::{path_walk, wwarn, LookUpFlags, StatFs, StrResult};
 use alloc::string::ToString;
 use alloc::sync::Arc;
+use crate::dentry::{LookUpFlags, path_walk};
+use crate::{StrResult, wwarn};
+use crate::superblock::StatFs;
 
 #[derive(Debug, Clone)]
 pub struct FileAttribute {
