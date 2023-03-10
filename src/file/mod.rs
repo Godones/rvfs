@@ -1,11 +1,14 @@
 mod define;
+use crate::dentry::{
+    advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry, LookUpData,
+    LookUpFlags, PathType,
+};
 use crate::info::ProcessFs;
-use alloc::sync::Arc;
-use log::{error, info};
-pub use define::*;
-use crate::{StrResult, wwarn};
-use crate::dentry::{advance_link, advance_mount, DirContext, DirEntry, find_file_indir, LookUpData, LookUpFlags, path_walk, PathType};
 use crate::inode::{Inode, InodeMode};
+use crate::{ddebug, StrResult};
+use alloc::sync::Arc;
+pub use define::*;
+use log::{debug, error};
 
 /// 打开文件
 /// * name:文件名
@@ -16,7 +19,7 @@ pub fn vfs_open_file<T: ProcessFs>(
     flags: FileFlags,
     mode: FileMode,
 ) -> StrResult<Arc<File>> {
-    wwarn!("open_file");
+    ddebug!("open_file");
     let mut flags = flags;
     //  如果flag包含truncate标志，则将其转换为读写模式
     if flags.contains(FileFlags::O_TRUNC) {
@@ -46,18 +49,13 @@ pub fn vfs_read_file<T: ProcessFs>(
         return Err("file not open for reading");
     }
     let read = file.f_ops.read;
-
     read(file.clone(), buf, offset)
 }
 
 // pub fn vfs_open
 
 /// write file
-pub fn vfs_write_file<T: ProcessFs>(
-    file: Arc<File>,
-    buf: &[u8],
-    offset: u64,
-) -> StrResult<usize> {
+pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
     let write = file.f_ops.write;
     let mode = file.f_mode;
     if !mode.contains(FileMode::FMODE_WRITE) {
@@ -73,7 +71,7 @@ pub fn vfs_write_file<T: ProcessFs>(
 }
 
 pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
-    wwarn!("vfs_mkdir");
+    ddebug!("vfs_mkdir");
     let lookup_data = path_walk::<T>(name, LookUpFlags::NOLAST);
     if lookup_data.is_err() {
         return Err("Can't find father dir");
@@ -82,17 +80,17 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
     if lookup_data.path_type != PathType::PATH_NORMAL {
         return Err("It is not normal dir");
     }
-    info!("find child dir");
+    debug!("find child dir");
     // 搜索子目录
     let last = lookup_data.last.clone();
-    info!("last:{}", last);
+    debug!("last:{}", last);
     let inode = lookup_data.dentry.access_inner().d_inode.clone();
     let dentry = lookup_data.dentry.clone();
     let sub_dentry = find_file_indir(&mut lookup_data, &last);
     if sub_dentry.is_ok() {
         return Err("Dir exists");
     }
-    info!("create new dir");
+    debug!("create new dir");
     // 调用函数创建一个新的目录
     let target_dentry = Arc::new(DirEntry::empty());
     // 设置目录名
@@ -132,7 +130,7 @@ fn construct_file(
     flags: FileFlags,
     mode: FileMode,
 ) -> StrResult<Arc<File>> {
-    wwarn!("construct_file");
+    ddebug!("construct_file");
     let dentry = lookup_data.dentry.clone();
     let inode = dentry.access_inner().d_inode.clone();
     let f_ops = inode.file_ops.clone();
@@ -148,7 +146,7 @@ fn construct_file(
     let binding = &lookup_data.mnt;
     let sb = &binding.super_block;
     sb.insert_file(file.clone());
-    wwarn!("construct_file end");
+    ddebug!("construct_file end");
     Ok(file)
 }
 
@@ -178,8 +176,8 @@ pub fn open_dentry<T: ProcessFs>(
     flags: FileFlags,
     mode: FileMode,
 ) -> StrResult<LookUpData> {
-    wwarn!("open_dentry");
-    info!("{:?} -> {:?}", flags, Into::<LookUpFlags>::into(flags));
+    ddebug!("open_dentry");
+    debug!("{:?} -> {:?}", flags, Into::<LookUpFlags>::into(flags));
 
     // TODO 根据路径从缓存中直接查找
     // 只打开文件而不创建
@@ -200,7 +198,7 @@ pub fn open_dentry<T: ProcessFs>(
     lookup_data.flags -= LookUpFlags::NOLAST;
     // 获得父目录项
     let last = lookup_data.last.clone();
-    info!("find father over, find child [{}] in dir", last);
+    debug!("find father over, find child [{}] in dir", last);
     let mut find = find_file_indir(&mut lookup_data, &last).map(|x| x.1);
     // 识别最后一个分量
     let res = __recognize_last::<T>(&mut find, inode, flags, mode, &mut lookup_data);
@@ -217,12 +215,15 @@ fn __recognize_last<T: ProcessFs>(
     mode: FileMode,
     lookup_data: &mut LookUpData,
 ) -> StrResult<()> {
-    wwarn!("__recognize_last");
+    ddebug!("__recognize_last");
     let mut count = 0usize;
     if find.is_err() {
         // 在父目录中创建文件
         // 调用文件系统的回调来创建真实的文件
-        info!("create file in dir {}", lookup_data.dentry.access_inner().d_name);
+        debug!(
+            "create file in dir {}",
+            lookup_data.dentry.access_inner().d_name
+        );
         let create_func = inode.inode_ops.create;
         let target_dentry = Arc::new(DirEntry::empty());
         // 设置dentry信息
@@ -273,7 +274,7 @@ fn __recognize_last<T: ProcessFs>(
     check_file_flags();
     // 设置正确结果
     lookup_data.dentry = find_dentry;
-    wwarn!("__recognize_last over");
+    ddebug!("__recognize_last over");
     Ok(())
 }
 

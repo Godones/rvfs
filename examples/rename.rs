@@ -1,11 +1,14 @@
 use rvfs::dentry::vfs_rename;
-use rvfs::{FakeFSC, init_vfs};
-use rvfs::file::{FileFlags, FileMode, vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file};
+use rvfs::file::{
+    vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, FileFlags, FileMode,
+};
+use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
 fn main() {
     env_logger::init();
     println!("init vfs");
-    init_vfs();
+    let rootfs = mount_rootfs();
+    init_process_info(rootfs);
     let file1 = vfs_open_file::<FakeFSC>(
         "/file1",
         FileFlags::O_CREAT | FileFlags::O_RDWR,

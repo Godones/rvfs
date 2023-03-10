@@ -19,8 +19,6 @@ lazy_static = "1.4.0"
 hashbrown = "0.12.0"
 bitflags = "1.3.2"
 log = "0.4.17"
-kmpsearch = "1.0.0"
-
 
 [dev-dependencies]
 env_logger = "0.10.0"

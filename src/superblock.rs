@@ -5,10 +5,11 @@ use crate::mount::MountFlags;
 use crate::{StrResult, ALL_FS};
 use alloc::boxed::Box;
 use alloc::string::String;
-use alloc::sync::{Arc,Weak};
+use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
+use core::ptr::null;
 use spin::{Mutex, MutexGuard};
 
 pub type DevDesc = u32;
@@ -51,8 +52,8 @@ pub struct SuperBlockInner {
 }
 
 impl SuperBlockInner {
-    pub fn empty()->Self{
-        Self{
+    pub fn empty() -> Self {
+        Self {
             dirty_inode: Vec::new(),
             sync_inode: Vec::new(),
             files: Vec::new(),
@@ -110,14 +111,17 @@ impl SuperBlock {
 unsafe impl Sync for SuperBlock {}
 unsafe impl Send for SuperBlock {}
 
-pub trait Device: Debug {
+pub trait Device: Debug + Sync + Send {
     fn read(&self, buf: &mut [u8], offset: usize) -> Result<usize, ()>;
     fn write(&self, buf: &[u8], offset: usize) -> Result<usize, ()>;
-    fn flush(&self);
+    fn size(&self) -> usize;
+    fn flush(&self){}
 }
-pub trait DataOps:Debug {
-    fn device(&self,name:&str)->Arc<dyn Device>;
-    fn data(&self)->*const u8;
+pub trait DataOps: Debug {
+    fn device(&self, name: &str) -> Option<Arc<dyn Device>>;
+    fn data(&self) -> *const u8 {
+        null()
+    }
 }
 
 pub struct SuperBlockOps {

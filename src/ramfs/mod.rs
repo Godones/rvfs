@@ -1,18 +1,20 @@
 pub mod rootfs;
 pub mod tmpfs;
+use crate::dentry::{DirEntry, LookUpData};
+use crate::file::{File, FileMode, FileOps};
+use crate::inode::{create_tmp_inode_from_sb_blk, simple_statfs, Inode, InodeMode, InodeOps};
+use crate::mount::MountFlags;
+use crate::superblock::{
+    find_super_blk, DataOps, FileSystemType, SuperBlock, SuperBlockInner, SuperBlockOps,
+};
+use crate::{ddebug, StrResult};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use hashbrown::HashMap;
-use log::info;
+use log::{debug};
 use spin::Mutex;
-use crate::file::{File, FileMode, FileOps};
-use crate::inode::{create_tmp_inode_from_sb_blk, Inode, InodeMode, InodeOps, simple_statfs};
-use crate::mount::MountFlags;
-use crate::{StrResult, wwarn};
-use crate::dentry::{DirEntry, LookUpData};
-use crate::superblock::{DataOps, FileSystemType, find_super_blk, SuperBlock, SuperBlockInner, SuperBlockOps};
 
 #[derive(Clone)]
 pub struct RamFsInode {
@@ -86,19 +88,19 @@ fn ramfs_simple_super_blk(
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
 ) -> StrResult<Arc<SuperBlock>> {
-    wwarn!("ramfs_simple_super_blk");
+    ddebug!("ramfs_simple_super_blk");
     let find_sb_blk = find_super_blk(fs_type.clone(), None);
     let sb_blk = match find_sb_blk {
         // 找到了旧超级快
         Ok(sb_blk) => sb_blk,
         Err(_) => {
             // 没有找到旧超级快需要重新分配
-            info!("create new super block for ramfs");
+            debug!("create new super block for ramfs");
 
             create_simple_ram_super_blk(fs_type, flags, dev_name, data)?
         }
     };
-    wwarn!("ramfs_simple_super_blk end");
+    ddebug!("ramfs_simple_super_blk end");
     Ok(sb_blk)
 }
 
@@ -146,7 +148,7 @@ fn ramfs_create_inode(
     file_ops: FileOps,
     name: String,
 ) -> StrResult<Arc<Inode>> {
-    wwarn!("ramfs_create_inode");
+    ddebug!("ramfs_create_inode");
     // 创建raminode
     let ram_inode = RamFsInode::new(mode, attr, number);
     fs.lock().insert(number, ram_inode.clone());
@@ -173,7 +175,7 @@ fn ramfs_create_inode(
     assert!(old.is_none());
     dir.access_inner().file_size = ram_inode.dentries.len();
     drop(dir);
-    wwarn!("ramfs_create_inode end");
+    ddebug!("ramfs_create_inode end");
     Ok(inode)
 }
 
@@ -190,7 +192,7 @@ fn ramfs_mkdir(
     inode_ops: InodeOps,
     file_ops: FileOps,
 ) -> StrResult<()> {
-    wwarn!("ramfs_mkdir");
+    ddebug!("ramfs_mkdir");
     let inode = ramfs_create_inode(
         fs,
         dir,
@@ -202,7 +204,7 @@ fn ramfs_mkdir(
         dentry.access_inner().d_name.clone(),
     )?;
     dentry.access_inner().d_inode = inode;
-    wwarn!("ramfs_mkdir end");
+    ddebug!("ramfs_mkdir end");
     Ok(())
 }
 
@@ -216,7 +218,7 @@ fn ramfs_create(
     inode_ops: InodeOps,
     file_ops: FileOps,
 ) -> StrResult<()> {
-    wwarn!("rootfs_create");
+    ddebug!("rootfs_create");
     let inode = ramfs_create_inode(
         fs,
         dir,
@@ -228,7 +230,7 @@ fn ramfs_create(
         dentry.access_inner().d_name.clone(),
     )?;
     dentry.access_inner().d_inode = inode;
-    wwarn!("rootfs_create end");
+    ddebug!("rootfs_create end");
     Ok(())
 }
 
@@ -264,12 +266,12 @@ fn ramfs_write_file(
     buf: &[u8],
     offset: u64,
 ) -> StrResult<usize> {
-    wwarn!("ramfs_write_file");
+    ddebug!("ramfs_write_file");
     let dentry = &file.f_dentry;
     let inode = &dentry.access_inner().d_inode;
     // 获取inode的编号
     let number = inode.number;
-    info!("number: {}", number);
+    debug!("number: {}", number);
     let mut binding = fs.lock();
     let ram_inode = binding.get_mut(&number);
     if ram_inode.is_none() {
@@ -295,7 +297,7 @@ fn ramfs_link(
     dir: Arc<Inode>,
     new_dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
-    wwarn!("ramfs_link");
+    ddebug!("ramfs_link");
     let old_inode = old_dentry.access_inner().d_inode.clone();
     old_inode.access_inner().hard_links += 1;
     let inode_number = old_inode.number;
@@ -313,7 +315,7 @@ fn ramfs_link(
     let name = new_dentry.access_inner().d_name.clone();
     ram_inode.dentries.insert(name, inode_number);
     dir_lock.access_inner().file_size = ram_inode.dentries.len();
-    wwarn!("ramfs_link end");
+    ddebug!("ramfs_link end");
     Ok(())
 }
 
@@ -322,7 +324,7 @@ fn ramfs_unlink(
     dir: Arc<Inode>,
     dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
-    wwarn!("ramfs_unlink");
+    ddebug!("ramfs_unlink");
     assert_eq!(dir.mode, InodeMode::S_DIR);
     let name = dentry.access_inner().d_name.clone();
 
@@ -344,9 +346,7 @@ fn ramfs_unlink(
     let dir_number = dir.number;
     let dir_ram_inode = binding.get_mut(&dir_number).unwrap();
     dir_ram_inode.dentries.remove(&name);
-    dir.access_inner().file_size = dir_ram_inode.dentries.len();
-
-    wwarn!("ramfs_unlink end");
+    ddebug!("ramfs_unlink end");
     Ok(())
 }
 
@@ -360,7 +360,7 @@ fn ramfs_symlink(
     inode_ops: InodeOps,
     file_ops: FileOps,
 ) -> StrResult<()> {
-    wwarn!("ramfs_symlink");
+    ddebug!("ramfs_symlink");
     let inode = ramfs_create_inode(
         fs.clone(),
         dir,
@@ -376,26 +376,26 @@ fn ramfs_symlink(
     ram_inode.data.extend_from_slice(target.as_bytes());
     inode.access_inner().file_size = target.len();
     dentry.access_inner().d_inode = inode;
-    wwarn!("ramfs_symlink end");
+    ddebug!("ramfs_symlink end");
     Ok(())
 }
 
 fn ramfs_read_link(ram_inode: &RamFsInode, buf: &mut [u8]) -> StrResult<usize> {
-    wwarn!("ramfs_read_link");
+    ddebug!("ramfs_read_link");
     let read_len = core::cmp::min(buf.len(), ram_inode.data.len());
     unsafe {
         core::ptr::copy(ram_inode.data.as_ptr(), buf.as_mut_ptr(), read_len);
     }
-    wwarn!("ramfs_read_link end");
+    ddebug!("ramfs_read_link end");
     Ok(read_len)
 }
 
 /// TODO
 fn ramfs_follow_link(ram_inode: &RamFsInode, lookup_data: &mut LookUpData) -> StrResult<()> {
-    wwarn!("ramfs_follow_link");
+    ddebug!("ramfs_follow_link");
     let target_name = ram_inode.data.clone();
     let name = String::from_utf8(target_name).unwrap();
     lookup_data.symlink_names.push(name);
-    wwarn!("ramfs_follow_link end");
+    ddebug!("ramfs_follow_link end");
     Ok(())
 }

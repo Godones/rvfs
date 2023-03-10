@@ -1,5 +1,14 @@
+use super::{
+    ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_follow_link,
+    ramfs_kill_super_blk, ramfs_link, ramfs_mkdir, ramfs_read_file, ramfs_read_link,
+    ramfs_simple_super_blk, ramfs_symlink, ramfs_unlink, ramfs_write_file, RamFsInode,
+};
 use crate::dentry::{DirContext, DirEntry, LookUpData};
+use crate::file::{File, FileMode, FileOps};
 use crate::inode::{Inode, InodeFlags, InodeMode, InodeOps};
+use crate::mount::MountFlags;
+use crate::superblock::{DataOps, FileSystemAttr, FileSystemType, FileSystemTypeInner, SuperBlock};
+use crate::{ddebug, StrResult};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
@@ -8,13 +17,8 @@ use core::cmp::min;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
-use log::{error, info};
+use log::{debug, error};
 use spin::Mutex;
-use crate::file::{File, FileMode, FileOps};
-use crate::mount::MountFlags;
-use super::{RamFsInode,ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_follow_link, ramfs_kill_super_blk, ramfs_link, ramfs_mkdir, ramfs_read_file, ramfs_read_link, ramfs_simple_super_blk, ramfs_symlink, ramfs_unlink, ramfs_write_file};
-use crate::{StrResult, wwarn};
-use crate::superblock::{DataOps, FileSystemAttr, FileSystemType, FileSystemTypeInner, SuperBlock};
 
 static INODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -99,7 +103,7 @@ fn rootfs_get_super_blk(
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
 ) -> StrResult<Arc<SuperBlock>> {
-    wwarn!("rootfs_get_super_blk");
+    ddebug!("rootfs_get_super_blk");
     let sb_blk = ramfs_simple_super_blk(fs_type.clone(), flags, dev_name, data)?;
     assert_eq!(INODE_COUNT.load(Ordering::SeqCst), 0);
     let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
@@ -118,12 +122,12 @@ fn rootfs_get_super_blk(
     sb_blk.update_root(dentry);
     // 将sb_blk插入到fs_type的链表中
     fs_type.insert_super_blk(sb_blk.clone());
-    wwarn!("rootfs_get_super_blk end");
+    ddebug!("rootfs_get_super_blk end");
     Ok(sb_blk)
 }
 
 fn rootfs_mkdir(dir: Arc<Inode>, dentry: Arc<DirEntry>, attr: FileMode) -> StrResult<()> {
-    wwarn!("rootfs_mkdir");
+    ddebug!("rootfs_mkdir");
     let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_mkdir(
         ROOT_FS.clone(),
@@ -134,12 +138,12 @@ fn rootfs_mkdir(dir: Arc<Inode>, dentry: Arc<DirEntry>, attr: FileMode) -> StrRe
         ROOTFS_DIR_INODE_OPS,
         ROOTFS_DIR_FILE_OPS,
     )?;
-    wwarn!("rootfs_mkdir end");
+    ddebug!("rootfs_mkdir end");
     Ok(())
 }
 
 fn rootfs_create(dir: Arc<Inode>, dentry: Arc<DirEntry>, mode: FileMode) -> StrResult<()> {
-    wwarn!("rootfs_create");
+    ddebug!("rootfs_create");
     error!("***** {}", dentry.access_inner().d_name);
     let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_create(
@@ -151,20 +155,20 @@ fn rootfs_create(dir: Arc<Inode>, dentry: Arc<DirEntry>, mode: FileMode) -> StrR
         ROOTFS_FILE_INODE_OPS,
         ROOTFS_FILE_FILE_OPS,
     )?;
-    wwarn!("rootfs_create end");
+    ddebug!("rootfs_create end");
     Ok(())
 }
 
 fn rootfs_read_file(file: Arc<File>, buf: &mut [u8], offset: u64) -> StrResult<usize> {
-    wwarn!("rootfs_read_file");
+    ddebug!("rootfs_read_file");
     let len = ramfs_read_file(ROOT_FS.clone(), file, buf, offset)?;
-    wwarn!("rootfs_read_file end");
+    ddebug!("rootfs_read_file end");
     Ok(len)
 }
 fn rootfs_write_file(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
-    wwarn!("rootfs_write_file");
+    ddebug!("rootfs_write_file");
     let len = ramfs_write_file(ROOT_FS.clone(), file, buf, offset)?;
-    wwarn!("rootfs_write_file end");
+    ddebug!("rootfs_write_file end");
     Ok(len)
 }
 
@@ -174,24 +178,24 @@ fn rootfs_link(
     dir: Arc<Inode>,
     new_dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
-    wwarn!("rootfs_link");
+    ddebug!("rootfs_link");
     let _number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_link(ROOT_FS.clone(), old_dentry, dir, new_dentry)?;
-    wwarn!("rootfs_link end");
+    ddebug!("rootfs_link end");
     Ok(())
 }
 
 /// decrease the hard link count of the inode
 fn rootfs_unlink(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
-    wwarn!("rootfs_unlink");
+    ddebug!("rootfs_unlink");
     ramfs_unlink(ROOT_FS.clone(), dir, dentry)?;
-    wwarn!("rootfs_unlink end");
+    ddebug!("rootfs_unlink end");
     Ok(())
 }
 
 /// create a symbolic link
 fn rootfs_symlink(dir: Arc<Inode>, dentry: Arc<DirEntry>, target: &str) -> StrResult<()> {
-    wwarn!("rootfs_symlink");
+    ddebug!("rootfs_symlink");
     let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_symlink(
         ROOT_FS.clone(),
@@ -203,7 +207,7 @@ fn rootfs_symlink(dir: Arc<Inode>, dentry: Arc<DirEntry>, target: &str) -> StrRe
         ROOTFS_SYMLINK_INODE_OPS,
         ROOTFS_SYMLINK_FILE_OPS,
     )?;
-    wwarn!("rootfs_symlink end");
+    ddebug!("rootfs_symlink end");
     Ok(())
 }
 
@@ -229,9 +233,8 @@ fn rootfs_follow_link(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> St
 
 /// read the contents of a directory
 fn rootfs_readdir(file: Arc<File>) -> StrResult<DirContext> {
-    wwarn!("rootfs_readdir");
+    ddebug!("rootfs_readdir");
     let inode = file.f_dentry.access_inner().d_inode.clone();
-    let inode = inode;
     let number = inode.number;
     let bind = ROOT_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
@@ -241,12 +244,12 @@ fn rootfs_readdir(file: Arc<File>) -> StrResult<DirContext> {
         data.push(0);
     });
     let dir_context = DirContext::new(data);
-    wwarn!("rootfs_readdir end");
+    ddebug!("rootfs_readdir end");
     Ok(dir_context)
 }
 
 fn rootfs_rmdir(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
-    wwarn!("rootfs_rmdir");
+    ddebug!("rootfs_rmdir");
     let inode = dir;
     let number = inode.number;
     let mut bind = ROOT_FS.lock();
@@ -260,12 +263,9 @@ fn rootfs_rmdir(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
 
     let sub_dir = dentry.access_inner().d_inode.clone();
     let sub_number = sub_dir.number;
-
-    // update the dir size
-    inode.access_inner().file_size = ram_inode.dentries.len();
     // delete the sub dir
     bind.remove(&sub_number);
-    wwarn!("rootfs_rmdir end");
+    ddebug!("rootfs_rmdir end");
     Ok(())
 }
 
@@ -331,7 +331,7 @@ fn rootfs_rename(
     new_dir: Arc<Inode>,
     new_dentry: Arc<DirEntry>,
 ) -> StrResult<()> {
-    wwarn!("rootfs_rename");
+    ddebug!("rootfs_rename");
     let old_dir_number = old_dir.number;
     let mut bind = ROOT_FS.lock();
     let old_dir_inode = bind.get_mut(&old_dir_number).unwrap();
@@ -339,9 +339,8 @@ fn rootfs_rename(
     old_dir_inode.dentries.remove(&old_name);
     old_dir.access_inner().file_size -= 1;
 
-    info!("{:?}", old_dir_inode.dentries);
-    drop(old_dir);
-    info!("update old dir over ....");
+    debug!("{:?}", old_dir_inode.dentries);
+    debug!("update old dir over ....");
     let new_dir_number = new_dir.number;
     let new_dir_inode = bind.get_mut(&new_dir_number).unwrap();
     let new_name = new_dentry.access_inner().d_name.clone();
@@ -349,7 +348,7 @@ fn rootfs_rename(
         .dentries
         .insert(new_name, old_dentry.access_inner().d_inode.number);
     if is_new.is_some() {
-        info!("is new file");
+        debug!("is new file");
         //mark the new file as invalid
         let new_file = new_dentry.access_inner().d_inode.clone();
         new_file.access_inner().flags = InodeFlags::S_INVALID;
@@ -358,6 +357,6 @@ fn rootfs_rename(
     } else {
         new_dir.access_inner().file_size += 1;
     }
-    wwarn!("rootfs_rename end");
+    ddebug!("rootfs_rename end");
     Ok(())
 }

@@ -1,12 +1,13 @@
-use rvfs::file::{FileFlags, FileMode, vfs_mkdir, vfs_open_file};
-use rvfs::{FakeFSC, init_vfs};
 use rvfs::dentry::vfs_truncate;
+use rvfs::file::{vfs_mkdir, vfs_open_file, FileFlags, FileMode};
 use rvfs::stat::{vfs_getattr, vfs_getxattr, vfs_listxattr, vfs_removexattr, vfs_setxattr};
+use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
 fn main() {
     env_logger::init();
     println!("init vfs");
-    init_vfs();
+    let rootfs = mount_rootfs();
+    init_process_info(rootfs);
     vfs_mkdir::<FakeFSC>("/tmp", FileMode::FMODE_WRITE).unwrap();
     vfs_setxattr::<FakeFSC>("/tmp", "type", "dir".as_bytes()).unwrap();
     vfs_setxattr::<FakeFSC>("/tmp", "target", "mount".as_bytes()).unwrap();

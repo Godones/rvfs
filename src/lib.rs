@@ -1,5 +1,5 @@
-#![feature(linked_list_remove)]
 #![feature(const_mut_refs)]
+#![feature(const_weak_new)]
 #![no_std]
 //! virtual file system framework
 
@@ -14,29 +14,21 @@ pub mod ramfs;
 pub mod stat;
 pub mod superblock;
 
-
 extern crate alloc;
 extern crate log;
-use info::{ProcessFs, ProcessFsInfo, VfsTime};
-use ramfs::rootfs::root_fs_type;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
-use lazy_static::lazy_static;
-pub use log::{info, warn};
-use spin::{Mutex, RwLock};
 use crate::dentry::DirEntry;
 use crate::mount::{do_kernel_mount, MountFlags, VfsMount};
-use crate::superblock::{register_filesystem,SuperBlock,FileSystemType};
+use crate::superblock::{register_filesystem, FileSystemType};
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+use info::{ProcessFs, ProcessFsInfo, VfsTime};
+use lazy_static::lazy_static;
+pub use log::{debug, info, warn};
+use ramfs::rootfs::root_fs_type;
+use spin::{Mutex, RwLock};
 
 pub type StrResult<T> = Result<T, &'static str>;
 
-lazy_static! {
-    pub static ref SUPERBLOCKS: Mutex<Vec<SuperBlock>> = Mutex::new(Vec::new());
-}
-
-lazy_static! {
-    pub static ref GLOBAL_DIR_ENTRY: RwLock<Vec<Arc<DirEntry>>> = RwLock::new(Vec::new());
-}
 lazy_static! {
     pub static ref GLOBAL_HASH_MOUNT: RwLock<Vec<Arc<VfsMount>>> = RwLock::new(Vec::new());
 }
@@ -45,9 +37,9 @@ lazy_static! {
 }
 
 /// 初始化虚拟文件系统
-pub fn init_vfs() {
+pub fn mount_rootfs() -> Arc<VfsMount> {
     // 注册内存文件系统
-    iinfo!("init_vfs");
+    ddebug!("init_vfs");
     register_filesystem(root_fs_type()).unwrap();
     // 生成内存文件系统的超级块
     let mnt = do_kernel_mount(
@@ -58,15 +50,18 @@ pub fn init_vfs() {
         None,
     )
     .unwrap();
-    // info!("[init_vfs] mnt: {:#?}", mnt);
     // 设置进程的文件系统相关信息
-    // for test
+    GLOBAL_HASH_MOUNT.write().push(mnt.clone());
+    ddebug!("init_vfs end");
+    mnt
+}
+
+/// this function is used to init process file system info,but for test
+pub fn init_process_info(mnt: Arc<VfsMount>) {
     PROCESS_FS_CONTEXT.lock().cwd = mnt.root.clone();
     PROCESS_FS_CONTEXT.lock().root = mnt.root.clone();
     PROCESS_FS_CONTEXT.lock().cmnt = mnt.clone();
     PROCESS_FS_CONTEXT.lock().rmnt = mnt.clone();
-    iinfo!("init_vfs end");
-    GLOBAL_HASH_MOUNT.write().push(mnt);
 }
 
 pub struct ProcessFsContext {
@@ -117,7 +112,7 @@ impl ProcessFs for FakeFSC {
 #[macro_export]
 macro_rules! iinfo {
     ($t:expr) => {
-        $crate::info!("[{}] [{}] :{}", file!(), $t, line!());
+        $crate::debug!("[{}] [{}] :{}", file!(), $t, line!());
     };
 }
 
@@ -125,5 +120,12 @@ macro_rules! iinfo {
 macro_rules! wwarn {
     ($t:expr) => {
         $crate::warn!("[{}] [{}] :{}", file!(), $t, line!());
+    };
+}
+
+#[macro_export]
+macro_rules! ddebug {
+    ($t:expr) => {
+        $crate::debug!("[{}] [{}] :{}", file!(), $t, line!());
     };
 }

@@ -2,14 +2,14 @@ use crate::dentry::{path_walk, DirEntry, LookUpData, LookUpFlags};
 use crate::info::ProcessFs;
 use crate::inode::{InodeFlags, InodeMode};
 use crate::superblock::{lookup_filesystem, DataOps, SuperBlock};
-use crate::{wwarn, StrResult, GLOBAL_HASH_MOUNT};
+use crate::{ddebug, StrResult, GLOBAL_HASH_MOUNT};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use log::info;
+use log::{debug};
 use spin::{Mutex, MutexGuard};
 
 bitflags! {
@@ -31,7 +31,7 @@ pub struct VfsMount {
     pub root: Arc<DirEntry>,
     /// 本文件系统的超级快对象
     pub super_block: Arc<SuperBlock>,
-    inner: Mutex<VfsMountInner>,
+    pub inner: Mutex<VfsMountInner>,
 }
 #[derive(Debug)]
 pub struct VfsMountInner {
@@ -50,7 +50,7 @@ impl Debug for VfsMount {
             .field("dev_name", &self.dev_name)
             .field("root", &self.root)
             .field("super_block", &self.super_block)
-            .field("child", &self.inner)
+            .field("inner", &self.inner)
             .finish()
     }
 }
@@ -126,7 +126,7 @@ pub fn do_mount<T: ProcessFs>(
     flags: MountFlags,
     data: Option<Box<dyn DataOps>>,
 ) -> StrResult<Arc<VfsMount>> {
-    wwarn!("do_mount");
+    ddebug!("do_mount");
     //检查路径名是否为空
     if dir_name.is_empty() {
         return Err("Dirname is empty");
@@ -149,10 +149,10 @@ pub fn do_mount<T: ProcessFs>(
     if ret.is_err() {
         return Err("Can'dentry find mount dir");
     }
-    info!("**do_mount: path_walk ok");
+    debug!("**do_mount: path_walk ok");
     let lookup_data = ret.unwrap();
     let ret = do_add_mount(&lookup_data, fs_type, flags, mnt_flags, dev_name, data);
-    wwarn!("do_mount end");
+    ddebug!("do_mount end");
     ret
 }
 
@@ -164,13 +164,13 @@ fn do_add_mount(
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
 ) -> StrResult<Arc<VfsMount>> {
-    wwarn!("do_add_mount");
+    ddebug!("do_add_mount");
     if fs_type.is_empty() {
         return Err("fs_type is empty");
     }
     // 加载文件系统超级块
     let mount = do_kernel_mount(fs_type, flags, dev_name, mnt_flags, data)?;
-    info!("**do_add_mount: do_kernel_mount ok");
+    debug!("**do_add_mount: do_kernel_mount ok");
     // 检查是否对用户空间不可见
     if mount
         .super_block
@@ -180,7 +180,7 @@ fn do_add_mount(
         return Err("fs_internal");
     }
     // 挂载系统目录
-    info!("**do_add_mount: mount.lock().flag = mnt_flags ok");
+    debug!("**do_add_mount: mount.lock().flag = mnt_flags ok");
     check_and_graft_tree(mount, look)
 }
 
@@ -192,7 +192,7 @@ pub fn do_kernel_mount(
     mnt_flags: MountFlags,
     data: Option<Box<dyn DataOps>>,
 ) -> Result<Arc<VfsMount>, &'static str> {
-    wwarn!("do_kernel_mount");
+    ddebug!("do_kernel_mount");
     let fs_type = lookup_filesystem(fs_type);
     // 错误的文件系统类型
     if fs_type.is_none() {
@@ -206,12 +206,12 @@ pub fn do_kernel_mount(
 
     // 分配挂载点描述符
     let mount = VfsMount::new(dev_name, super_blk, Weak::new(), mnt_flags);
-    wwarn!("do_kernel_mount end");
+    ddebug!("do_kernel_mount end");
     Ok(mount)
 }
 /// 挂载到系统目录中
 fn check_and_graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<Arc<VfsMount>> {
-    wwarn!("check_and_graft_tree");
+    ddebug!("check_and_graft_tree");
     let mut global_mount_lock = GLOBAL_HASH_MOUNT.write();
     // 如果文件系统已经被安装在指定的安装点上，
     // let mnt = look.mnt.lock();
@@ -235,12 +235,12 @@ fn check_and_graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResul
     }
     graft_tree(new_mount.clone(), look)?;
     global_mount_lock.push(new_mount.clone());
-    wwarn!("check_and_graft_tree end");
+    ddebug!("check_and_graft_tree end");
     Ok(new_mount)
 }
 
 fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
-    wwarn!("graft_tree");
+    ddebug!("graft_tree");
     // mount点应该是目录
     // 被mount的对象也应当(根)目录
     if !look
@@ -258,7 +258,7 @@ fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
     {
         return Err("not dir");
     }
-    info!("**graft_tree: check dir ok");
+    debug!("**graft_tree: check dir ok");
     // 目录被删除了(但是内存中还存在)
     let dentry = look.dentry.clone();
     let inode = dentry.access_inner().d_inode.clone();
@@ -275,7 +275,7 @@ fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
     drop(dentry);
     // let in_cache = look.dentry.d_flags.contains(DirFlags::IN_HASH);
     //
-    // info!("**graft_tree: check in_cache ok");
+    // debug!("**graft_tree: check in_cache ok");
 
     // TODO 修改判断挂载点可用的条件
     // let c = look.dentry.clone();
@@ -291,10 +291,10 @@ fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
     look.mnt.inert_child(new_mount);
     look.dentry.access_inner().mount_count += 1;
 
-    // info!("parent: {:#?}", look.mnt);
-    // info!("child: {:#?}", new_mount);
+    // debug!("parent: {:#?}", look.mnt);
+    // debug!("child: {:#?}", new_mount);
 
-    wwarn!("graft_tree end");
+    ddebug!("graft_tree end");
     Ok(())
 }
 

@@ -1,9 +1,9 @@
-use crate::dentry::{DirEntry, find_file_indir, LookUpFlags, path_walk, PathType};
+use crate::dentry::{find_file_indir, path_walk, DirEntry, LookUpFlags, PathType};
 use crate::info::ProcessFs;
 use crate::inode::{InodeFlags, InodeMode};
+use crate::{ddebug, StrResult};
 use alloc::sync::Arc;
-use log::info;
-use crate::{StrResult, wwarn};
+use log::{debug};
 
 /// decrease the hard link count of a file
 /// * name: the path of the file
@@ -35,12 +35,10 @@ pub fn vfs_unlink<T: ProcessFs>(name: &str) -> StrResult<()> {
     // 调用函数删除文件
     let unlink = inode.inode_ops.unlink;
     unlink(inode.clone(), sub_dentry.clone())?;
-
     // mark the inode as deleted
     sub_dentry.access_inner().d_inode.access_inner().flags = InodeFlags::S_INVALID;
-
     dentry.remove_child(&last);
-
+    inode.access_inner().file_size -= 1;
     Ok(())
 }
 
@@ -48,7 +46,7 @@ pub fn vfs_unlink<T: ProcessFs>(name: &str) -> StrResult<()> {
 /// * old: the path of the old file
 /// * new: the path of the new file
 pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
-    wwarn!("vfs_link");
+    ddebug!("vfs_link");
     // 查找old的inode
     let old_lookup_data = path_walk::<T>(old, LookUpFlags::READ_LINK)?;
     // 判断是否是目录
@@ -63,7 +61,7 @@ pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
         return Err("vfs_link: new path not found");
     }
     let mut new_lookup_data = new_lookup_data.unwrap();
-    info!(
+    debug!(
         "vfs_link: new_lookup_data.path_type = {:?}",
         new_lookup_data.path_type
     );
@@ -96,6 +94,6 @@ pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
     )?;
     // 确保文件系统完成功能再加入到缓存中
     dentry.insert_child(target_dentry);
-    wwarn!("vfs_link: ok");
+    ddebug!("vfs_link: ok");
     Ok(())
 }

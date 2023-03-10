@@ -1,11 +1,12 @@
 use rvfs::dentry::vfs_rmdir;
-use rvfs::{FakeFSC, init_vfs};
-use rvfs::file::{FileFlags, FileMode, vfs_mkdir, vfs_open_file};
+use rvfs::file::{vfs_mkdir, vfs_open_file, FileFlags, FileMode};
+use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
 fn main() {
     env_logger::init();
     println!("init vfs");
-    init_vfs();
+    let rootfs = mount_rootfs();
+    init_process_info(rootfs);
     vfs_rmdir::<FakeFSC>("/")
         .is_err()
         .then(|| println!("rmdir / failed"));

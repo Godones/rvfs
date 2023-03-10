@@ -1,11 +1,12 @@
-use rvfs::file::{FileFlags, FileMode, vfs_mkdir, vfs_open_file, vfs_readdir, vfs_write_file};
-use rvfs::{FakeFSC, init_vfs};
+use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_readdir, vfs_write_file, FileFlags, FileMode};
 use rvfs::link::{vfs_link, vfs_readlink, vfs_symlink, vfs_unlink};
+use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
 fn main() {
     env_logger::init();
     println!("init vfs");
-    init_vfs();
+    let rootfs = mount_rootfs();
+    init_process_info(rootfs);
     // let lookup_data = path_walk::<FakeFSC>("/", LookUpFlags::DIRECTORY).unwrap();
     // println!("lookup_data: {:#?}", lookup_data);
     println!("mkdir /tmp");

@@ -1,10 +1,11 @@
+use crate::dentry::{path_walk, LookUpFlags};
+use crate::file::{vfs_open_file, FileFlags, FileMode};
 use crate::info::{ProcessFs, VfsTime};
 use crate::inode::{Inode, InodeMode};
+use crate::superblock::StatFs;
+use crate::{ddebug, StrResult};
 use alloc::string::ToString;
 use alloc::sync::Arc;
-use crate::dentry::{LookUpFlags, path_walk};
-use crate::{StrResult, wwarn};
-use crate::superblock::StatFs;
 
 #[derive(Debug, Clone)]
 pub struct FileAttribute {
@@ -25,11 +26,13 @@ pub struct FileAttribute {
 
 /// get file attribute
 pub fn vfs_getattr<T: ProcessFs>(file_name: &str) -> StrResult<FileAttribute> {
-    let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
-    let inode = lookup_data.dentry.access_inner().d_inode.clone();
+    // let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
+    let file = vfs_open_file::<T>(file_name, FileFlags::O_RDONLY, FileMode::FMODE_READ)?;
+    let inode = file.f_dentry.access_inner().d_inode.clone();
     let attr = generic_get_file_attribute(inode);
     Ok(attr)
 }
+
 /// 读取文件的状态信息
 ///
 /// 在文件系统未实现此功能时默认调用
@@ -75,12 +78,12 @@ pub fn vfs_statfs<T: ProcessFs>(file_name: &str) -> StrResult<StatFs> {
 
 // set file attribute
 pub fn vfs_setxattr<T: ProcessFs>(file_name: &str, key: &str, value: &[u8]) -> StrResult<()> {
-    wwarn!("vfs_setxattr");
+    ddebug!("vfs_setxattr");
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let inode = lookup_data.dentry.access_inner().d_inode.clone();
     let set_attr = inode.inode_ops.set_attr;
     set_attr(lookup_data.dentry, key, value)?;
-    wwarn!("vfs_setxattr end");
+    ddebug!("vfs_setxattr end");
     Ok(())
 }
 
@@ -89,31 +92,31 @@ pub fn vfs_getxattr<T: ProcessFs>(
     key: &str,
     value: &mut [u8],
 ) -> StrResult<usize> {
-    wwarn!("vfs_getxattr");
+    ddebug!("vfs_getxattr");
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let inode = lookup_data.dentry.access_inner().d_inode.clone();
     let get_attr = inode.inode_ops.get_attr;
     let len = get_attr(lookup_data.dentry, key, value)?;
-    wwarn!("vfs_getxattr end");
+    ddebug!("vfs_getxattr end");
     Ok(len)
 }
 
 pub fn vfs_removexattr<T: ProcessFs>(file_name: &str, key: &str) -> StrResult<()> {
-    wwarn!("vfs_removexattr");
+    ddebug!("vfs_removexattr");
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let inode = lookup_data.dentry.access_inner().d_inode.clone();
     let remove_attr = inode.inode_ops.remove_attr;
     remove_attr(lookup_data.dentry, key)?;
-    wwarn!("vfs_removexattr end");
+    ddebug!("vfs_removexattr end");
     Ok(())
 }
 
 pub fn vfs_listxattr<T: ProcessFs>(file_name: &str, buf: &mut [u8]) -> StrResult<usize> {
-    wwarn!("vfs_listxattr");
+    ddebug!("vfs_listxattr");
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let inode = lookup_data.dentry.access_inner().d_inode.clone();
     let list_attr = inode.inode_ops.list_attr;
     let len = list_attr(lookup_data.dentry, buf)?;
-    wwarn!("vfs_listxattr end");
+    ddebug!("vfs_listxattr end");
     Ok(len)
 }

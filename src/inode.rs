@@ -1,12 +1,13 @@
 use crate::dentry::{DirEntry, LookUpData};
 use crate::file::{FileMode, FileOps};
+use crate::superblock::{DataOps, Device, StatFs, SuperBlock};
+use crate::{ddebug, StrResult};
+use alloc::boxed::Box;
 use alloc::string::ToString;
-use alloc::sync::{Arc,Weak};
+use alloc::sync::{Arc, Weak};
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use spin::{Mutex, MutexGuard};
-use crate::{StrResult, wwarn};
-use crate::superblock::{Device, StatFs, SuperBlock};
 
 bitflags! {
     pub struct InodeFlags:u32{
@@ -54,10 +55,12 @@ pub struct InodeInner {
     pub gid: u32,
     /// 文件大小
     pub file_size: usize,
+    /// private data
+    pub data: Option<Box<dyn DataOps>>,
 }
 
 impl Inode {
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self {
             number: 0,
             dev_desc: 0,
@@ -73,9 +76,12 @@ impl Inode {
                 uid: 0,
                 gid: 0,
                 file_size: 0,
+                data: None,
             }),
         }
     }
+    /// create a inode from super block and some other info
+    /// * the init hardlinks is 0, user should set it after create a inode
     pub fn new(
         sb_blk: Arc<SuperBlock>,
         number: usize,
@@ -100,6 +106,7 @@ impl Inode {
                 uid: 0,
                 gid: 0,
                 file_size: 0,
+                data: None,
             }),
         };
         inode
@@ -116,7 +123,7 @@ impl Inode {
 pub struct InodeOps {
     pub follow_link: fn(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> StrResult<()>,
     pub readlink: fn(dentry: Arc<DirEntry>, buf: &mut [u8]) -> StrResult<usize>,
-    pub lookup: fn(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> StrResult<Arc<DirEntry>>,
+    pub lookup: fn(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()>,
     /// 在某一目录下，为与目录项对象相关的普通文件创建一个新的磁盘索引节点。
     pub create: fn(dir: Arc<Inode>, dentry: Arc<DirEntry>, mode: FileMode) -> StrResult<()>,
     /// mkdir(dir, dentry, mode)  在某个目录下，为与目录项对应的目录创建一个新的索引节点
@@ -193,7 +200,7 @@ pub fn create_tmp_inode_from_sb_blk(
     file_ops: FileOps,
     blk_dev: Option<Arc<dyn Device>>,
 ) -> StrResult<Arc<Inode>> {
-    wwarn!("create_tmp_inode_from_sb_blk");
+    ddebug!("create_tmp_inode_from_sb_blk");
     let create_func = sb_blk.super_block_ops.alloc_inode;
     let res = create_func(sb_blk.clone());
     let inode = match res {
@@ -206,6 +213,6 @@ pub fn create_tmp_inode_from_sb_blk(
     };
     // 设置硬链接数
     inode.access_inner().hard_links = 1;
-    wwarn!("create_tmp_inode_from_sb_blk end");
+    ddebug!("create_tmp_inode_from_sb_blk end");
     Ok(inode)
 }

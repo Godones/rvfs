@@ -1,3 +1,5 @@
+use crate::inode::{Inode, InodeMode};
+use crate::mount::VfsMount;
 use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
@@ -5,8 +7,6 @@ use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use spin::{Mutex, MutexGuard};
-use crate::inode::{Inode, InodeMode};
-use crate::mount::VfsMount;
 bitflags! {
     pub struct DirFlags:u32{
         const IN_HASH = 0x1;
@@ -69,7 +69,7 @@ impl DirEntry {
     ) -> Self {
         DirEntry {
             d_flags,
-            d_ops:dir_ops,
+            d_ops: dir_ops,
             inner: Mutex::new(DirEntryInner {
                 d_name: name.to_string(),
                 parent,
@@ -124,7 +124,7 @@ impl Debug for DirEntryOps {
 }
 
 impl DirEntryOps {
-    fn empty() -> Self {
+    pub const fn empty() -> Self {
         DirEntryOps {
             d_hash: |_, _| 0,
             d_compare: |_, _, _| false,
