@@ -164,7 +164,7 @@ fn __normal_load_dentry<T: ProcessFs>(
     } else if dir == ".." {
         // 尝试回到父目录
         recede_parent::<T>(&mut lookup_data.mnt, &mut lookup_data.dentry)?;
-        inode = lookup_data.dentry.access_inner().d_inode.clone();
+        // inode = lookup_data.dentry.access_inner().d_inode.clone();
         return Ok(());
     }
     // 在当前目录中搜索下一个分量。
@@ -175,7 +175,9 @@ fn __normal_load_dentry<T: ProcessFs>(
     advance_mount(&mut next_mnt, &mut next_dentry)?;
 
     // 如果是一个符号链接并且需要读取链接文件
-    if lookup_flags.contains(LookUpFlags::READ_LINK) && inode.mode == InodeMode::S_SYMLINK {
+    if lookup_flags.contains(LookUpFlags::READ_LINK)
+        && next_dentry.access_inner().d_inode.mode == InodeMode::S_SYMLINK
+    {
         // 处理链接文件
         advance_link::<T>(lookup_data, next_dentry.clone())?;
         inode = lookup_data.dentry.access_inner().d_inode.clone();

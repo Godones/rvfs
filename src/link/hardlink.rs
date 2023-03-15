@@ -3,7 +3,7 @@ use crate::info::ProcessFs;
 use crate::inode::{InodeFlags, InodeMode};
 use crate::{ddebug, StrResult};
 use alloc::sync::Arc;
-use log::{debug};
+use log::debug;
 
 /// decrease the hard link count of a file
 /// * name: the path of the file
@@ -37,6 +37,7 @@ pub fn vfs_unlink<T: ProcessFs>(name: &str) -> StrResult<()> {
     unlink(inode.clone(), sub_dentry.clone())?;
     // mark the inode as deleted
     sub_dentry.access_inner().d_inode.access_inner().flags = InodeFlags::S_INVALID;
+    // remove the dentry from the parent
     dentry.remove_child(&last);
     inode.access_inner().file_size -= 1;
     Ok(())

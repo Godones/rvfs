@@ -121,7 +121,9 @@ impl Inode {
 }
 
 pub struct InodeOps {
+    /// the fs should fill the symlink_names in lookup_data using the content of the symlink
     pub follow_link: fn(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> StrResult<()>,
+    /// read the content of a symlink
     pub readlink: fn(dentry: Arc<DirEntry>, buf: &mut [u8]) -> StrResult<usize>,
     pub lookup: fn(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()>,
     /// 在某一目录下，为与目录项对象相关的普通文件创建一个新的磁盘索引节点。
@@ -177,6 +179,17 @@ impl InodeOps {
     }
 }
 
+impl From<&[u8]> for InodeMode {
+    fn from(bytes: &[u8]) -> Self {
+        match bytes {
+            b"f" => InodeMode::S_FILE,
+            b"d" => InodeMode::S_DIR,
+            b"l" => InodeMode::S_SYMLINK,
+            _ => InodeMode::empty(),
+        }
+    }
+}
+
 pub fn simple_statfs(sb_blk: Arc<SuperBlock>) -> StrResult<StatFs> {
     let stat = StatFs {
         fs_type: sb_blk.magic,
@@ -190,7 +203,7 @@ pub fn simple_statfs(sb_blk: Arc<SuperBlock>) -> StrResult<StatFs> {
     Ok(stat)
 }
 
-/// 创建一个inode
+/// create inode from super block
 pub fn create_tmp_inode_from_sb_blk(
     sb_blk: Arc<SuperBlock>,
     number: usize,
@@ -212,7 +225,12 @@ pub fn create_tmp_inode_from_sb_blk(
         _ => return Err("create inode failed"),
     };
     // 设置硬链接数
-    inode.access_inner().hard_links = 1;
+    match mode {
+        InodeMode::S_DIR => inode.access_inner().hard_links = 2,
+        InodeMode::S_FILE => inode.access_inner().hard_links = 1,
+        InodeMode::S_SYMLINK => inode.access_inner().hard_links = 1,
+        _ => return Err("error file type"),
+    }
     ddebug!("create_tmp_inode_from_sb_blk end");
     Ok(inode)
 }

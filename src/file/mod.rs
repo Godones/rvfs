@@ -48,6 +48,14 @@ pub fn vfs_read_file<T: ProcessFs>(
     if !mode.contains(FileMode::FMODE_READ) {
         return Err("file not open for reading");
     }
+    let inode = file.f_dentry.access_inner().d_inode.clone();
+    if !inode.is_valid() {
+        error!("file is invalid");
+        return Err("file is invalid");
+    }
+    if inode.mode == InodeMode::S_DIR {
+        return Err("file is dir");
+    }
     let read = file.f_ops.read;
     read(file.clone(), buf, offset)
 }
@@ -66,6 +74,9 @@ pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) ->
     if !inode.is_valid() {
         error!("file is invalid");
         return Err("file is invalid");
+    }
+    if inode.mode == InodeMode::S_DIR {
+        return Err("file is dir");
     }
     write(file.clone(), buf, offset)
 }
@@ -132,6 +143,12 @@ fn construct_file(
 ) -> StrResult<Arc<File>> {
     ddebug!("construct_file");
     let dentry = lookup_data.dentry.clone();
+    // 将文件放入超级块的文件表中
+    let binding = &lookup_data.mnt;
+    let sb = &binding.super_block;
+    if let Some(file) = sb.find_file(&dentry) {
+        return Ok(file);
+    }
     let inode = dentry.access_inner().d_inode.clone();
     let f_ops = inode.file_ops.clone();
     let open = f_ops.open;
@@ -143,8 +160,6 @@ fn construct_file(
         return Err(res.err().unwrap());
     }
     // 将文件放入超级块的文件表中
-    let binding = &lookup_data.mnt;
-    let sb = &binding.super_block;
     sb.insert_file(file.clone());
     ddebug!("construct_file end");
     Ok(file)

@@ -83,6 +83,21 @@ bitflags! {
         const FMODE_EXEC = 0x5; //read and execute
     }
 }
+impl From<&[u8]> for FileMode {
+    fn from(value: &[u8]) -> Self {
+        let mut mode = FileMode::empty();
+        if value.contains(&b'r') {
+            mode |= FileMode::FMODE_READ;
+        }
+        if value.contains(&b'w') {
+            mode |= FileMode::FMODE_WRITE;
+        }
+        if value.contains(&b'x') {
+            mode |= FileMode::FMODE_EXEC;
+        }
+        mode
+    }
+}
 
 pub enum SeekFrom {
     Start(u64),

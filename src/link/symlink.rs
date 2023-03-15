@@ -4,7 +4,7 @@ use crate::inode::{Inode, InodeMode};
 use crate::{ddebug, StrResult};
 use alloc::borrow::ToOwned;
 use alloc::sync::Arc;
-use log::{debug};
+use log::debug;
 
 /// create a symlink
 /// * target: the target of the symlink

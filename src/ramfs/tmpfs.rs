@@ -9,7 +9,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
 
 use lazy_static::lazy_static;
-use log::{debug};
+use log::debug;
 
 use super::{
     ramfs_create, ramfs_create_root_dentry, ramfs_create_root_inode, ramfs_follow_link,
@@ -85,11 +85,15 @@ const TMPFS_FILE_FILE_OPS: FileOps = {
     ops.open = |_| Ok(());
     ops
 };
-
-const TMPFS_SYMLINK_FILE_OPS: FileOps = FileOps::empty();
+const TMPFS_SYMLINK_FILE_OPS: FileOps = {
+    let mut ops = FileOps::empty();
+    ops.open = |_| Ok(());
+    ops
+};
 
 const TMPFS_DIR_FILE_OPS: FileOps = {
     let mut ops = FileOps::empty();
+    ops.open = |_| Ok(());
     ops.readdir = tmpfs_readdir;
     ops
 };

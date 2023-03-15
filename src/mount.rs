@@ -9,7 +9,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use log::{debug};
+use log::debug;
 use spin::{Mutex, MutexGuard};
 
 bitflags! {

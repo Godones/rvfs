@@ -13,7 +13,7 @@ use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use hashbrown::HashMap;
-use log::{debug};
+use log::debug;
 use spin::Mutex;
 
 #[derive(Clone)]
@@ -135,7 +135,10 @@ fn ramfs_create_root_dentry(
     assert!(parent.is_none());
     dentry.access_inner().d_inode = inode;
     dentry.access_inner().d_name = "/".to_string();
-    Ok(Arc::new(dentry))
+    let dentry = Arc::new(dentry);
+    // set parent to self
+    dentry.access_inner().parent = Arc::downgrade(&dentry);
+    Ok(dentry)
 }
 
 fn ramfs_create_inode(

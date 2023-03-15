@@ -98,6 +98,13 @@ impl SuperBlock {
     pub fn remove_file(&self, file: Arc<File>) {
         self.access_inner().files.retain(|f| !Arc::ptr_eq(f, &file));
     }
+    pub fn find_file(&self, dentry: &Arc<DirEntry>) -> Option<Arc<File>> {
+        self.access_inner()
+            .files
+            .iter()
+            .find(|f| Arc::ptr_eq(&f.f_dentry, dentry))
+            .cloned()
+    }
     pub fn remove_inode(&self, inode: Arc<Inode>) {
         let mut inner = self.inner.lock();
         inner.dirty_inode.retain(|i| !Arc::ptr_eq(i, &inode));
@@ -115,7 +122,7 @@ pub trait Device: Debug + Sync + Send {
     fn read(&self, buf: &mut [u8], offset: usize) -> Result<usize, ()>;
     fn write(&self, buf: &[u8], offset: usize) -> Result<usize, ()>;
     fn size(&self) -> usize;
-    fn flush(&self){}
+    fn flush(&self) {}
 }
 pub trait DataOps: Debug {
     fn device(&self, name: &str) -> Option<Arc<dyn Device>>;
