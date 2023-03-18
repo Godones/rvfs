@@ -1,4 +1,4 @@
-use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_readdir, vfs_write_file, FileFlags, FileMode};
+use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_readdir, vfs_write_file, OpenFlags, FileMode};
 use rvfs::link::{vfs_link, vfs_readlink, vfs_symlink, vfs_unlink};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
@@ -11,11 +11,11 @@ fn main() {
     // println!("lookup_data: {:#?}", lookup_data);
     println!("mkdir /tmp");
     vfs_mkdir::<FakeFSC>("/tmp", FileMode::FMODE_WRITE).unwrap();
-    let file0 = vfs_open_file::<FakeFSC>("/tmp", FileFlags::O_RDWR, FileMode::FMODE_READ).unwrap();
+    let file0 = vfs_open_file::<FakeFSC>("/tmp", OpenFlags::O_RDWR, FileMode::FMODE_READ).unwrap();
     println!("file: {:#?}", file0);
     let file = vfs_open_file::<FakeFSC>(
         "/tmp/f1",
-        FileFlags::O_RDWR | FileFlags::O_CREAT,
+        OpenFlags::O_RDWR | OpenFlags::O_CREAT,
         FileMode::FMODE_READ | FileMode::FMODE_WRITE,
     )
     .unwrap();
@@ -24,7 +24,7 @@ fn main() {
     println!("link ok ......");
     let file_f2 = vfs_open_file::<FakeFSC>(
         "/tmp/f2",
-        FileFlags::O_RDWR,
+        OpenFlags::O_RDWR,
         FileMode::FMODE_READ | FileMode::FMODE_WRITE,
     )
     .unwrap();
@@ -33,7 +33,7 @@ fn main() {
     vfs_symlink::<FakeFSC>("/tmp", "/tmp/f3").unwrap();
     println!("symlink ok ......");
     let file =
-        vfs_open_file::<FakeFSC>("/tmp/f3", FileFlags::O_RDWR, FileMode::FMODE_READ).unwrap();
+        vfs_open_file::<FakeFSC>("/tmp/f3", OpenFlags::O_RDWR, FileMode::FMODE_READ).unwrap();
     println!("file: {:#?}", file);
 
     println!("--------------------------------------");

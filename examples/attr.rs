@@ -1,5 +1,5 @@
 use rvfs::dentry::vfs_truncate;
-use rvfs::file::{vfs_mkdir, vfs_open_file, FileFlags, FileMode};
+use rvfs::file::{vfs_mkdir, vfs_open_file, OpenFlags, FileMode};
 use rvfs::stat::{vfs_getattr, vfs_getxattr, vfs_listxattr, vfs_removexattr, vfs_setxattr};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
@@ -46,7 +46,7 @@ fn main() {
     });
     vfs_open_file::<FakeFSC>(
         "/tmp/f1",
-        FileFlags::O_CREAT | FileFlags::O_RDWR,
+        OpenFlags::O_CREAT | OpenFlags::O_RDWR,
         FileMode::FMODE_WRITE,
     )
     .unwrap();

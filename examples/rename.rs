@@ -1,6 +1,6 @@
 use rvfs::dentry::vfs_rename;
 use rvfs::file::{
-    vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, FileFlags, FileMode,
+    vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, OpenFlags, FileMode,
 };
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
@@ -11,13 +11,13 @@ fn main() {
     init_process_info(rootfs);
     let file1 = vfs_open_file::<FakeFSC>(
         "/file1",
-        FileFlags::O_CREAT | FileFlags::O_RDWR,
+        OpenFlags::O_CREAT | OpenFlags::O_RDWR,
         FileMode::FMODE_WRITE | FileMode::FMODE_READ,
     )
     .unwrap();
     let file2 = vfs_open_file::<FakeFSC>(
         "/file2",
-        FileFlags::O_CREAT | FileFlags::O_RDWR,
+        OpenFlags::O_CREAT | OpenFlags::O_RDWR,
         FileMode::FMODE_WRITE | FileMode::FMODE_READ,
     )
     .unwrap();
@@ -28,7 +28,7 @@ fn main() {
 
     println!("--------------------rename /file1 to /file3----------------------");
     vfs_rename::<FakeFSC>("/file1", "/file3").unwrap();
-    let root = vfs_open_file::<FakeFSC>("/", FileFlags::O_RDONLY, FileMode::FMODE_READ).unwrap();
+    let root = vfs_open_file::<FakeFSC>("/", OpenFlags::O_RDONLY, FileMode::FMODE_READ).unwrap();
     // println!("root: {:#?}", root);
     vfs_readdir(root.clone())
         .unwrap()
@@ -53,7 +53,7 @@ fn main() {
     vfs_mkdir::<FakeFSC>("/tmp", FileMode::FMODE_WRITE).unwrap();
     let _file3 = vfs_open_file::<FakeFSC>(
         "/tmp/file3",
-        FileFlags::O_CREAT | FileFlags::O_RDWR,
+        OpenFlags::O_CREAT | OpenFlags::O_RDWR,
         FileMode::FMODE_WRITE | FileMode::FMODE_READ,
     );
     // println!("file3: {:#?}", file3);
@@ -65,7 +65,7 @@ fn main() {
     });
     // println!("file3: {:#?}", file3);
     let tmp =
-        vfs_open_file::<FakeFSC>("/tmptmp", FileFlags::O_RDONLY, FileMode::FMODE_READ).unwrap();
+        vfs_open_file::<FakeFSC>("/tmptmp", OpenFlags::O_RDONLY, FileMode::FMODE_READ).unwrap();
     vfs_readdir(tmp).unwrap().into_iter().for_each(|name| {
         println!("name: {}", name);
     });

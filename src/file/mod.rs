@@ -16,14 +16,14 @@ use log::{debug, error};
 /// * mode: 创建文件读写权限
 pub fn vfs_open_file<T: ProcessFs>(
     name: &str,
-    flags: FileFlags,
+    flags: OpenFlags,
     mode: FileMode,
 ) -> StrResult<Arc<File>> {
     ddebug!("open_file");
     let mut flags = flags;
     //  如果flag包含truncate标志，则将其转换为读写模式
-    if flags.contains(FileFlags::O_TRUNC) {
-        flags |= FileFlags::O_RDWR;
+    if flags.contains(OpenFlags::O_TRUNC) {
+        flags |= OpenFlags::O_RDWR;
     }
     let mut lookup_data = open_dentry::<T>(name, flags, mode)?;
     construct_file(&mut lookup_data, flags, mode)
@@ -60,7 +60,6 @@ pub fn vfs_read_file<T: ProcessFs>(
     read(file.clone(), buf, offset)
 }
 
-// pub fn vfs_open
 
 /// write file
 pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
@@ -138,7 +137,7 @@ pub fn vfs_fsync(file: Arc<File>) -> StrResult<()> {
 
 fn construct_file(
     lookup_data: &LookUpData,
-    flags: FileFlags,
+    flags: OpenFlags,
     mode: FileMode,
 ) -> StrResult<Arc<File>> {
     ddebug!("construct_file");
@@ -165,16 +164,16 @@ fn construct_file(
     Ok(file)
 }
 
-impl From<FileFlags> for LookUpFlags {
-    fn from(val: FileFlags) -> Self {
+impl From<OpenFlags> for LookUpFlags {
+    fn from(val: OpenFlags) -> Self {
         let mut flags = LookUpFlags::READ_LINK;
-        if val.contains(FileFlags::O_DIRECTORY) {
+        if val.contains(OpenFlags::O_DIRECTORY) {
             flags |= LookUpFlags::DIRECTORY;
         }
-        if val.contains(FileFlags::O_NOFOLLOW) {
+        if val.contains(OpenFlags::O_NOFOLLOW) {
             flags -= LookUpFlags::READ_LINK;
         }
-        if val.contains(FileFlags::O_EXCL | FileFlags::O_CREAT) {
+        if val.contains(OpenFlags::O_EXCL | OpenFlags::O_CREAT) {
             flags -= LookUpFlags::READ_LINK;
         }
         flags
@@ -188,15 +187,14 @@ impl From<FileFlags> for LookUpFlags {
 /// 5. 处理链接文件
 pub fn open_dentry<T: ProcessFs>(
     name: &str,
-    flags: FileFlags,
+    flags: OpenFlags,
     mode: FileMode,
 ) -> StrResult<LookUpData> {
     ddebug!("open_dentry");
     debug!("{:?} -> {:?}", flags, Into::<LookUpFlags>::into(flags));
-
     // TODO 根据路径从缓存中直接查找
     // 只打开文件而不创建
-    if !flags.contains(FileFlags::O_CREAT) {
+    if !flags.contains(OpenFlags::O_CREAT) {
         let res = path_walk::<T>(name, flags.into())?;
         //TODO 检查文件属性是否与参数冲突
         check_file_flags();
@@ -226,7 +224,7 @@ pub fn open_dentry<T: ProcessFs>(
 fn __recognize_last<T: ProcessFs>(
     find: &mut Result<Arc<DirEntry>, &str>,
     inode: Arc<Inode>,
-    flags: FileFlags,
+    flags: OpenFlags,
     mode: FileMode,
     lookup_data: &mut LookUpData,
 ) -> StrResult<()> {
@@ -249,19 +247,19 @@ fn __recognize_last<T: ProcessFs>(
 
         lookup_data.dentry = target_dentry;
         let mut flags = flags;
-        flags -= FileFlags::O_TRUNC;
+        flags -= OpenFlags::O_TRUNC;
         check_file_flags();
         return Ok(());
     }
     // 文件存在
     // 如果包含O_EXCL，不能打开文件
-    if flags.contains(FileFlags::O_EXCL) {
+    if flags.contains(OpenFlags::O_EXCL) {
         return Err("flags contains O_EXCL");
     }
     // 是否挂载了文件系统
     let mut find_dentry = find.as_ref().unwrap().clone();
     if find_dentry.access_inner().mount_count > 0 {
-        if flags.contains(FileFlags::O_NOFOLLOW) {
+        if flags.contains(OpenFlags::O_NOFOLLOW) {
             return Err("Don't dentry solve mount file");
         }
         advance_mount(&mut lookup_data.mnt, &mut find_dentry)?;
@@ -294,13 +292,13 @@ fn __recognize_last<T: ProcessFs>(
 }
 
 fn __solve_link_file<T: ProcessFs>(
-    flags: FileFlags,
+    flags: OpenFlags,
     mode: FileMode,
     inode: Arc<Inode>,
     lookup_data: &mut LookUpData,
     count: &mut usize,
 ) -> StrResult<()> {
-    if flags.contains(FileFlags::O_NOFOLLOW) {
+    if flags.contains(OpenFlags::O_NOFOLLOW) {
         return Err("open_DirEntry: file is a symbolic link");
     }
     lookup_data.flags |= LookUpFlags::NOLAST;
