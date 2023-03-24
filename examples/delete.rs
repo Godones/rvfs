@@ -1,5 +1,5 @@
 use rvfs::dentry::vfs_rmdir;
-use rvfs::file::{vfs_mkdir, vfs_open_file, FileFlags, FileMode};
+use rvfs::file::{vfs_mkdir, vfs_open_file, OpenFlags, FileMode};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
 fn main() {
@@ -14,7 +14,7 @@ fn main() {
         .is_ok()
         .then(|| println!("mkdir /tmp success"));
     vfs_rmdir::<FakeFSC>("/tmp").unwrap();
-    vfs_open_file::<FakeFSC>("/tmp", FileFlags::O_RDWR, FileMode::FMODE_WRITE)
+    vfs_open_file::<FakeFSC>("/tmp", OpenFlags::O_RDWR, FileMode::FMODE_WRITE)
         .is_err()
         .then(|| println!("open /tmp failed"));
     vfs_mkdir::<FakeFSC>("/tmp", FileMode::FMODE_WRITE)
@@ -22,7 +22,7 @@ fn main() {
         .then(|| println!("mkdir /tmp success"));
     vfs_open_file::<FakeFSC>(
         "/tmp/f1",
-        FileFlags::O_RDWR | FileFlags::O_CREAT,
+        OpenFlags::O_RDWR | OpenFlags::O_CREAT,
         FileMode::FMODE_WRITE,
     )
     .is_ok()

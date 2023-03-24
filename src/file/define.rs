@@ -12,7 +12,7 @@ pub struct File {
     pub f_mnt: Arc<VfsMount>,
     // 文件操作
     pub f_ops: FileOps,
-    pub flags: FileFlags,
+    pub flags: OpenFlags,
     // 打开模式
     pub f_mode: FileMode,
     inner: Mutex<FileInner>,
@@ -40,7 +40,7 @@ impl File {
     pub fn new(
         dentry: Arc<DirEntry>,
         mnt: Arc<VfsMount>,
-        flags: FileFlags,
+        flags: OpenFlags,
         mode: FileMode,
         f_ops: FileOps,
     ) -> File {
@@ -63,17 +63,18 @@ impl File {
 }
 
 bitflags! {
-    pub struct FileFlags:u32{
-        const O_RDONLY = 0x1;
-        const O_WRONLY = 0x2;
-        const O_RDWR = 0x4;
-        const O_CREAT = 0x8;
-        const O_EXCL = 0x10;
-        const O_TRUNC = 0x20;
-        const O_APPEND = 0x40;
-        const O_DIRECTORY = 0x80;
-        const O_NOFOLLOW = 0x100;
-        const O_CLOEXEC = 0x200;
+    pub struct OpenFlags:u32{
+        const O_RDONLY = 0;
+        const O_WRONLY = 1;
+        const O_RDWR = 2;
+        const O_CREAT = 0100;
+        const O_EXCL = 0200;
+        const O_NOCTTY = 0400;
+        const O_TRUNC = 01000;
+        const O_APPEND = 02000;
+        const O_NONBLOCK = 04000;
+        const O_NOFOLLOW = 0400000;
+        const O_DIRECTORY = 0200000;
     }
 }
 bitflags! {

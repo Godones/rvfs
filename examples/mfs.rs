@@ -1,5 +1,5 @@
 use rvfs::dentry::{path_walk, LookUpFlags};
-use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_read_file, vfs_write_file, FileFlags, FileMode};
+use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_read_file, vfs_write_file, OpenFlags, FileMode};
 use rvfs::link::{vfs_link, vfs_symlink, vfs_unlink};
 use rvfs::mount::{do_mount, MountFlags};
 use rvfs::ramfs::tmpfs::tmp_fs_type;
@@ -35,7 +35,7 @@ fn main() {
     // open or create file
     let file = vfs_open_file::<FakeFSC>(
         "/f1",
-        FileFlags::O_RDWR | FileFlags::O_CREAT,
+        OpenFlags::O_RDWR | OpenFlags::O_CREAT,
         FileMode::FMODE_WRITE | FileMode::FMODE_READ,
     )
     .unwrap();

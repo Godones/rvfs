@@ -215,21 +215,23 @@ fn recede_parent<T: ProcessFs>(
     mnt: &mut Arc<VfsMount>,
     dentry: &mut Arc<DirEntry>,
 ) -> StrResult<()> {
-    let mut t_mnt = mnt.clone();
-    let mut t_dentry = dentry.clone();
+    ddebug!("recede_parent");
+    let t_mnt = mnt;
+    let t_dentry = dentry;
     loop {
         // TODO 获取当前进程文件系统上下文的锁，防止线程修改根目录
         let process_fs = T::get_fs_info();
         // 如果当前目录是根目录，那么不需要回退
-        if Arc::ptr_eq(&process_fs.root_dir, &t_dentry)
-            && Arc::ptr_eq(&t_mnt, &process_fs.root_mount)
+        if Arc::ptr_eq(&process_fs.root_dir, t_dentry)
+            && Arc::ptr_eq(t_mnt, &process_fs.root_mount)
         {
             break;
         }
         // 如果当前目录不是所在文件系统的根目录，那么需要回退
-        if !Arc::ptr_eq(&t_dentry, &t_mnt.root) {
+        if !Arc::ptr_eq(t_dentry, &t_mnt.root) {
+            debug!("try to recede parent");
             let parent = t_dentry.access_inner().parent.clone().upgrade().unwrap();
-            t_dentry = parent;
+            *t_dentry = parent;
             break;
         }
         let _global_mnt = GLOBAL_HASH_MOUNT.read();
@@ -240,11 +242,12 @@ fn recede_parent<T: ProcessFs>(
             break;
         }
         // 获取挂载点
-        t_dentry = t_mnt.access_inner().mount_point.clone();
-        t_mnt = parent_mnt.unwrap();
+        *t_dentry = t_mnt.access_inner().mount_point.clone();
+        *t_mnt = parent_mnt.unwrap();
     }
+    ddebug!("recede_parent ok");
     // 处理父目录也是安装点的情况
-    advance_mount(&mut t_mnt, &mut t_dentry)
+    advance_mount(t_mnt,  t_dentry)
 }
 
 /// 在当前目录中搜索指定文件
