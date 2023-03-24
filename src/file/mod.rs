@@ -8,7 +8,7 @@ use crate::inode::{Inode, InodeMode};
 use crate::{ddebug, StrResult};
 use alloc::sync::Arc;
 pub use define::*;
-use log::{debug, error};
+use log::{debug};
 
 /// 打开文件
 /// * name:文件名
@@ -54,7 +54,7 @@ pub fn vfs_read_file<T: ProcessFs>(
     }
     let inode = file.f_dentry.access_inner().d_inode.clone();
     if !inode.is_valid() {
-        error!("file is invalid");
+        debug!("file is invalid");
         return Err("file is invalid");
     }
     if inode.mode == InodeMode::S_DIR {
@@ -84,7 +84,7 @@ pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) ->
     // check whether file is valid
     let inode = file.f_dentry.access_inner().d_inode.clone();
     if !inode.is_valid() {
-        error!("file is invalid");
+        debug!("file is invalid");
         return Err("file is invalid");
     }
     if inode.mode == InodeMode::S_DIR {
@@ -268,12 +268,12 @@ pub fn open_dentry<T: ProcessFs>(
     }
     // 查找文件所在父目录
     let mut lookup_data = path_walk::<T>(name, LookUpFlags::NOLAST)?;
-    // 最后一个分量是目录。失败
-    if lookup_data.path_type != PathType::PATH_NORMAL {
-        return Err("open_DirEntry: last path component is a directory");
-    }
     if lookup_data.path_type == PathType::PATH_ROOT{
         return Ok(lookup_data)
+    }
+    // not dir
+    if lookup_data.path_type != PathType::PATH_NORMAL {
+        return Err("open_DirEntry: last path component is a directory");
     }
     let dentry = lookup_data.dentry.clone();
     let inode = dentry.access_inner().d_inode.clone();

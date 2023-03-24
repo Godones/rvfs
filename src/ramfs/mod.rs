@@ -28,6 +28,7 @@ pub struct RamFsInode {
     mode: InodeMode,
     hard_links: u32,
     // write/read mod
+    #[allow(unused)]
     attr: FileMode,
     // extra attribute
     ex_attr: HashMap<String, Vec<u8>>,

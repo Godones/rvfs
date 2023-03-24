@@ -6,7 +6,7 @@ use crate::{ddebug, StrResult, GLOBAL_HASH_MOUNT};
 use alloc::string::ToString;
 use alloc::sync::Arc;
 pub use define::*;
-use log::{debug, error};
+use log::{debug};
 
 /// 当删除物理文件时，释放缓存描述符的引用并将其从哈希表中删除
 pub fn remove_dentry_cache(_dentry: Arc<DirEntry>) {
@@ -320,7 +320,7 @@ fn __find_file_from_device(lookup_data: &mut LookUpData, name: &str) -> StrResul
     target_dentry.access_inner().parent = Arc::downgrade(&lookup_data.dentry);
     let res = lookup_func(inode, target_dentry.clone());
     if res.is_err() {
-        error!("lookup file from device error");
+        debug!("lookup file from device error");
         return Err("file not found");
     }
     // 将新创建的dentry加入到父目录的子目录列表中
@@ -595,7 +595,7 @@ pub fn vfs_rename<T: ProcessFs>(old_name: &str, new_name: &str) -> StrResult<()>
         // TODO(lookup_data should do)
     }
     let new_last = new_lookup_data.last.clone();
-    error!("new last: {}", new_last);
+    debug!("new last: {}", new_last);
     let res = find_file_indir(&mut new_lookup_data, &new_last);
     let new_sub_dentry = match res {
         Ok((_, sub_dentry)) => sub_dentry,
@@ -609,7 +609,7 @@ pub fn vfs_rename<T: ProcessFs>(old_name: &str, new_name: &str) -> StrResult<()>
             Arc::new(dentry)
         }
     };
-    error!("path walk over");
+    debug!("path walk over");
 
     let old_inode = old_dentry.access_inner().d_inode.clone();
     // the old_dentry may be equal to new_dentry

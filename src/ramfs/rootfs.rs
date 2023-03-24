@@ -17,7 +17,7 @@ use core::cmp::min;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
-use log::{debug, error};
+use log::{debug};
 use spin::Mutex;
 
 static INODE_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -144,7 +144,6 @@ fn rootfs_mkdir(dir: Arc<Inode>, dentry: Arc<DirEntry>, attr: FileMode) -> StrRe
 
 fn rootfs_create(dir: Arc<Inode>, dentry: Arc<DirEntry>, mode: FileMode) -> StrResult<()> {
     ddebug!("rootfs_create");
-    error!("***** {}", dentry.access_inner().d_name);
     let number = INODE_COUNT.fetch_add(1, Ordering::SeqCst);
     ramfs_create(
         ROOT_FS.clone(),
