@@ -291,6 +291,7 @@ fn ramfs_write_file(
             buf.len(),
         );
     }
+
     Ok(buf.len())
 }
 
@@ -402,3 +403,4 @@ fn ramfs_follow_link(ram_inode: &RamFsInode, lookup_data: &mut LookUpData) -> St
     ddebug!("ramfs_follow_link end");
     Ok(())
 }
+

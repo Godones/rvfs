@@ -26,7 +26,6 @@ pub struct FileAttribute {
 
 /// get file attribute
 pub fn vfs_getattr<T: ProcessFs>(file_name: &str) -> StrResult<FileAttribute> {
-    // let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let file = vfs_open_file::<T>(file_name, OpenFlags::O_RDONLY, FileMode::FMODE_READ)?;
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let attr = generic_get_file_attribute(inode);
