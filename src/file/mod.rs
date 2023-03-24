@@ -39,6 +39,10 @@ pub fn vfs_close_file<T: ProcessFs>(file: Arc<File>) -> StrResult<()> {
     Ok(())
 }
 
+
+/// read file
+///
+/// we will update the file offset if the read operation is successful.
 pub fn vfs_read_file<T: ProcessFs>(
     file: Arc<File>,
     buf: &mut [u8],
@@ -57,11 +61,20 @@ pub fn vfs_read_file<T: ProcessFs>(
         return Err("file is dir");
     }
     let read = file.f_ops.read;
-    read(file.clone(), buf, offset)
+    let len = read(file.clone(), buf, offset);
+    if len.is_ok() {
+        let len = len.unwrap();
+        // update inode offset
+        file.access_inner().f_pos = offset as usize + len;
+        return Ok(len);
+    }
+    Err("read error")
 }
 
 
 /// write file
+///
+/// This function will update the file size and offset if the write operation is successful.
 pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
     let write = file.f_ops.write;
     let mode = file.f_mode;
@@ -77,7 +90,22 @@ pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) ->
     if inode.mode == InodeMode::S_DIR {
         return Err("file is dir");
     }
-    write(file.clone(), buf, offset)
+    let len = write(file.clone(), buf, offset);
+    // update inode size and offset
+    if len.is_ok() {
+        let len = len.unwrap();
+        let mut size = inode.access_inner().file_size;
+        if offset as usize + len > size {
+            size = offset as usize + len;
+            inode.access_inner().file_size = size;
+        }
+        if offset as usize + len > file.access_inner().f_pos {
+            file.access_inner().f_pos = offset as usize + len;
+        }
+        Ok(len)
+    }else {
+        return Err("write file failed");
+    }
 }
 
 pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
@@ -115,9 +143,51 @@ pub fn vfs_mkdir<T: ProcessFs>(name: &str, mode: FileMode) -> StrResult<()> {
 }
 
 /// llseek
-pub fn vfs_llseek(file: Arc<File>, offset: u64, whence: SeekFrom) -> StrResult<u64> {
+pub fn vfs_llseek(file: Arc<File>, whence: SeekFrom) -> StrResult<u64> {
     let llseek = file.f_ops.llseek;
-    llseek(file.clone(), offset, whence)
+    let res = llseek(file.clone(), whence);
+    match res {
+        Err("Not support") =>{
+            return  __llseek(file, whence)
+        }
+        Err(_) => {
+            return Err("llseek error");
+        }
+        Ok(_) => {}
+    }
+    res
+}
+
+fn __llseek(file: Arc<File>, whence: SeekFrom) -> StrResult<u64> {
+    let f_size = file.f_dentry.access_inner().d_inode.access_inner().file_size;
+    let mut inner = file.access_inner();
+    match whence {
+        SeekFrom::Start(off) => {
+            if (off as i64) < 0{
+                return Err("invalid offset");
+            }
+            inner.f_pos = off as usize;
+        },
+        SeekFrom::End(off) => {
+            debug!("f_size: {}, off: {}", f_size, off);
+            let new_pos = f_size as i64 + off as i64;
+            if new_pos < 0 {
+                return Err("invalid offset");
+            }
+            inner.f_pos = new_pos as usize;
+        },
+        SeekFrom::Current(off) => {
+            let new_pos = inner.f_pos as i64 + off as i64;
+            if new_pos < 0 {
+                return Err("invalid offset");
+            }
+            inner.f_pos = new_pos as usize;
+        }
+        _ => {
+            return Err( "invalid whence");
+        }
+    }
+    Ok(inner.f_pos as u64)
 }
 
 pub fn vfs_readdir(file: Arc<File>) -> StrResult<DirContext> {

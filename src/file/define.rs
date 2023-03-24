@@ -100,10 +100,23 @@ impl From<&[u8]> for FileMode {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum SeekFrom {
     Start(u64),
     End(u64),
     Current(i64),
+    Unknown
+}
+
+impl From<(usize,usize)> for SeekFrom{
+    fn from(value: (usize, usize)) -> Self {
+        match value {
+            (0,offset) => SeekFrom::Start(offset as u64),
+            (1,offset) => SeekFrom::Current(offset as i64),
+            (2,offset) => SeekFrom::End(offset as u64),
+            _ => SeekFrom::Unknown
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -114,7 +127,7 @@ pub struct VmArea {
 
 #[derive(Clone)]
 pub struct FileOps {
-    pub llseek: fn(file: Arc<File>, offset: u64, whence: SeekFrom) -> StrResult<u64>,
+    pub llseek: fn(file: Arc<File>, whence: SeekFrom) -> StrResult<u64>,
     pub read: fn(file: Arc<File>, buf: &mut [u8], offset: u64) -> StrResult<usize>,
     pub write: fn(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize>,
     // 对于设备文件来说，这个字段应该为NULL。它仅用于读取目录，只对文件系统有用。
@@ -142,15 +155,15 @@ impl Debug for FileOps {
 impl FileOps {
     pub const fn empty() -> FileOps {
         FileOps {
-            llseek: |_, _, _| Err("NOT SUPPORT"),
-            read: |_, _, _| Err("NOT SUPPORT"),
-            write: |_, _, _| Err("NOT SUPPORT"),
-            readdir: |_| Err("NOT SUPPORT"),
-            ioctl: |_, _, _, _| Err("NOT SUPPORT"),
-            mmap: |_, _| Err("NOT SUPPORT"),
-            open: |_| Err("NOT SUPPORT"),
-            flush: |_| Err("NOT SUPPORT"),
-            fsync: |_, _| Err("NOT SUPPORT"),
+            llseek: |_, _| Err("Not support"),
+            read: |_, _, _| Err("Not support"),
+            write: |_, _, _| Err("Not support"),
+            readdir: |_| Err("Not support"),
+            ioctl: |_, _, _, _| Err("Not support"),
+            mmap: |_, _| Err("Not support"),
+            open: |_| Err("Not support"),
+            flush: |_| Err("Not support"),
+            fsync: |_, _| Err("Not support"),
         }
     }
 }
