@@ -249,12 +249,8 @@ impl From<OpenFlags> for LookUpFlags {
         flags
     }
 }
-/// 创建目录项节点
-/// 1. 只打开文件而不创建
-/// 2. 查找文件所在父目录
-/// 3. 在父目录创建文件
-/// 4. 在父目录打开文件
-/// 5. 处理链接文件
+
+
 pub fn open_dentry<T: ProcessFs>(
     name: &str,
     flags: OpenFlags,
@@ -276,10 +272,12 @@ pub fn open_dentry<T: ProcessFs>(
     if lookup_data.path_type != PathType::PATH_NORMAL {
         return Err("open_DirEntry: last path component is a directory");
     }
+    if lookup_data.path_type == PathType::PATH_ROOT{
+        return Ok(lookup_data)
+    }
     let dentry = lookup_data.dentry.clone();
     let inode = dentry.access_inner().d_inode.clone();
     lookup_data.flags -= LookUpFlags::NOLAST;
-    // 获得父目录项
     let last = lookup_data.last.clone();
     debug!("find father over, find child [{}] in dir", last);
     let mut find = find_file_indir(&mut lookup_data, &last).map(|x| x.1);
