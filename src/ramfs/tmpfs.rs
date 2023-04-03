@@ -276,7 +276,7 @@ fn tmpfs_get_attr(dentry: Arc<DirEntry>, key: &str, val: &mut [u8]) -> StrResult
     let len = ex_attr.as_slice().len();
     let min_len = min(len, val.len());
     val[..min_len].copy_from_slice(&ex_attr.as_slice()[..min_len]);
-    Ok(min_len)
+    Ok(ex_attr.as_slice().len())
 }
 fn tmpfs_set_attr(dentry: Arc<DirEntry>, key: &str, val: &[u8]) -> StrResult<()> {
     let inode = dentry.access_inner().d_inode.clone();
@@ -307,7 +307,7 @@ fn tmpfs_list_attr(dentry: Arc<DirEntry>, buf: &mut [u8]) -> StrResult<usize> {
     let len = attr_list.as_bytes().len();
     let min_len = min(len, buf.len());
     buf[..min_len].copy_from_slice(&attr_list.as_bytes()[..min_len]);
-    Ok(min_len)
+    Ok(len)
 }
 fn tmpfs_truncate(inode: Arc<Inode>) -> StrResult<()> {
     let number = inode.number;

@@ -273,11 +273,15 @@ fn rootfs_get_attr(dentry: Arc<DirEntry>, key: &str, val: &mut [u8]) -> StrResul
     let number = inode.number;
     let bind = ROOT_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
-    let ex_attr = ram_inode.ex_attr.get(key).unwrap();
+    let ex_attr = ram_inode.ex_attr.get(key);
+    if ex_attr.is_none() {
+        return Err("no such attr");
+    }
+    let ex_attr = ex_attr.unwrap();
     let len = ex_attr.as_slice().len();
     let min_len = min(len, val.len());
     val[..min_len].copy_from_slice(&ex_attr.as_slice()[..min_len]);
-    Ok(min_len)
+    Ok(ex_attr.as_slice().len())
 }
 fn rootfs_set_attr(dentry: Arc<DirEntry>, key: &str, val: &[u8]) -> StrResult<()> {
     let inode = dentry.access_inner().d_inode.clone();
@@ -292,7 +296,10 @@ fn rootfs_remove_attr(dentry: Arc<DirEntry>, key: &str) -> StrResult<()> {
     let number = inode.number;
     let mut bind = ROOT_FS.lock();
     let ram_inode = bind.get_mut(&number).unwrap();
-    ram_inode.ex_attr.remove(key);
+    let res = ram_inode.ex_attr.remove(key);
+    if res.is_none() {
+        return Err("no such attr");
+    }
     Ok(())
 }
 fn rootfs_list_attr(dentry: Arc<DirEntry>, buf: &mut [u8]) -> StrResult<usize> {
@@ -308,7 +315,7 @@ fn rootfs_list_attr(dentry: Arc<DirEntry>, buf: &mut [u8]) -> StrResult<usize> {
     let len = attr_list.as_bytes().len();
     let min_len = min(len, buf.len());
     buf[..min_len].copy_from_slice(&attr_list.as_bytes()[..min_len]);
-    Ok(min_len)
+    Ok(len)
 }
 
 fn rootfs_truncate(inode: Arc<Inode>) -> StrResult<()> {

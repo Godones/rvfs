@@ -1,6 +1,6 @@
 use rvfs::dentry::vfs_truncate;
 use rvfs::file::{vfs_mkdir, vfs_open_file, OpenFlags, FileMode};
-use rvfs::stat::{vfs_getattr, vfs_getxattr, vfs_listxattr, vfs_removexattr, vfs_setxattr};
+use rvfs::stat::{StatFlags, vfs_getattr, vfs_getxattr, vfs_listxattr, vfs_removexattr, vfs_setxattr};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
 fn main() {
@@ -14,7 +14,7 @@ fn main() {
     let mut buf = [0u8; 20];
     let len = vfs_listxattr::<FakeFSC>("/tmp", &mut buf).unwrap();
     println!("len: {}", len);
-    buf.split(|&x| x == 0)
+    buf[..len-1].split(|&x| x == 0)
         .collect::<Vec<&[u8]>>()
         .iter()
         .map(|&x| std::str::from_utf8(x).unwrap())
@@ -25,9 +25,9 @@ fn main() {
         });
     vfs_removexattr::<FakeFSC>("/tmp", "type").unwrap();
     let mut buf = [0u8; 20];
-    let _len = vfs_listxattr::<FakeFSC>("/tmp", &mut buf).unwrap();
+    let len = vfs_listxattr::<FakeFSC>("/tmp", &mut buf).unwrap();
 
-    buf.split(|&x| x == 0)
+    buf[..len-1].split(|&x| x == 0)
         .collect::<Vec<&[u8]>>()
         .iter()
         .map(|&x| std::str::from_utf8(x).unwrap())
@@ -53,6 +53,6 @@ fn main() {
     vfs_truncate::<FakeFSC>("/tmp/f1", 10).is_ok().then(|| {
         println!("truncate success");
     });
-    let attr = vfs_getattr::<FakeFSC>("/tmp/f1").unwrap();
+    let attr = vfs_getattr::<FakeFSC>("/tmp/f1",StatFlags::empty()).unwrap();
     println!("attr: {:#?}", attr);
 }

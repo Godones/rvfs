@@ -3,7 +3,7 @@ use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_read_file, vfs_write_file, OpenFl
 use rvfs::link::{vfs_link, vfs_symlink, vfs_unlink};
 use rvfs::mount::{do_mount, MountFlags};
 use rvfs::ramfs::tmpfs::tmp_fs_type;
-use rvfs::stat::vfs_getattr;
+use rvfs::stat::{StatFlags, vfs_getattr};
 use rvfs::superblock::register_filesystem;
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
@@ -96,21 +96,21 @@ fn main() {
         1
     );
 
-    let file_attr = vfs_getattr::<FakeFSC>("/f1").unwrap();
+    let file_attr = vfs_getattr::<FakeFSC>("/f1",StatFlags::empty()).unwrap();
     println!("file_attr: {:#?}", file_attr);
 
-    let dir_attr = vfs_getattr::<FakeFSC>("/").unwrap();
+    let dir_attr = vfs_getattr::<FakeFSC>("/",StatFlags::empty()).unwrap();
     println!("dir_attr: {:#?}", dir_attr);
 
     println!("-----------------------------------------");
     vfs_symlink::<FakeFSC>("/", "/s1").unwrap();
     println!("vfs_symlink ok ......");
 
-    let file_attr = vfs_getattr::<FakeFSC>("/s1").unwrap();
+    let file_attr = vfs_getattr::<FakeFSC>("/s1",StatFlags::empty()).unwrap();
     println!("file_attr: {:#?}", file_attr);
 
     vfs_symlink::<FakeFSC>("/tmp/tt1", "/s2").unwrap();
     println!("vfs_symlink ok ......");
-    let file_attr = vfs_getattr::<FakeFSC>("/s2").unwrap();
+    let file_attr = vfs_getattr::<FakeFSC>("/s2",StatFlags::empty()).unwrap();
     println!("file_attr: {:#?}", file_attr);
 }

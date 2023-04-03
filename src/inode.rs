@@ -3,8 +3,8 @@ use crate::file::{FileMode, FileOps};
 use crate::superblock::{DataOps, Device, StatFs, SuperBlock};
 use crate::{ddebug, StrResult};
 use alloc::boxed::Box;
-use alloc::string::ToString;
 use alloc::sync::{Arc, Weak};
+use core::cmp::min;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use spin::{Mutex, MutexGuard};
@@ -16,9 +16,9 @@ bitflags! {
         const S_INVALID = 0x4;
     }
     pub struct InodeMode:u32{
-        const S_SYMLINK = 0x1;
-        const S_DIR = 0x2;
-        const S_FILE = 0x4;
+        const S_SYMLINK = 0120000;
+        const S_DIR = 0040000;
+        const S_FILE = 0100000;
     }
 }
 
@@ -191,6 +191,11 @@ impl From<&[u8]> for InodeMode {
 }
 
 pub fn simple_statfs(sb_blk: Arc<SuperBlock>) -> StrResult<StatFs> {
+    let mut name = [0u8;32];
+    let fs_type = sb_blk.file_system_type.upgrade().unwrap();
+    let fs_type = fs_type.name.as_bytes();
+    let min = min(fs_type.len(), name.len());
+    name[..min].copy_from_slice(&fs_type[..min]);
     let stat = StatFs {
         fs_type: sb_blk.magic,
         block_size: sb_blk.block_size as u64,
@@ -198,7 +203,7 @@ pub fn simple_statfs(sb_blk: Arc<SuperBlock>) -> StrResult<StatFs> {
         free_blocks: 0,
         total_inodes: 0,
         name_len: 0,
-        name: sb_blk.blk_dev_name.to_string(),
+        name,
     };
     Ok(stat)
 }

@@ -172,6 +172,7 @@ impl SuperBlockOps {
 }
 
 #[derive(Debug, Default)]
+#[repr(C)]
 pub struct StatFs {
     pub fs_type: u32,
     pub block_size: u64,
@@ -179,7 +180,7 @@ pub struct StatFs {
     pub free_blocks: u64,
     pub total_inodes: u64,
     pub name_len: u32,
-    pub name: String,
+    pub name: [u8;32],
 }
 
 /// 文件系统类型

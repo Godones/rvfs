@@ -177,6 +177,7 @@ bitflags! {
         const READ_LINK = 0x1;
         const DIRECTORY = 0x2;
         const NOLAST = 0x4;
+        const EMPTY = 0x4000;
     }
 }
 

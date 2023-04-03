@@ -48,9 +48,9 @@ pub fn vfs_unlink<T: ProcessFs>(name: &str) -> StrResult<()> {
 /// * new: the path of the new file
 pub fn vfs_link<T: ProcessFs>(old: &str, new: &str) -> StrResult<()> {
     ddebug!("vfs_link");
-    // 查找old的inode
+    // find old_inode
     let old_lookup_data = path_walk::<T>(old, LookUpFlags::READ_LINK)?;
-    // 判断是否是目录
+    // whether it is a directory
     let old_inode = old_lookup_data.dentry.access_inner().d_inode.clone();
     if old_inode.mode == InodeMode::S_DIR {
         return Err("It is a directory");

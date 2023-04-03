@@ -1,10 +1,10 @@
 use crate::dentry::DirEntry;
 use crate::mount::VfsMount;
 use alloc::sync::Arc;
+use core::error::Error;
+use core::fmt::{Display, Formatter};
 
-/// 进程需要提供的信息
-///
-/// 由于vfs模块与内核模块分离了，所以需要进程提供一些信息
+/// The information of the process's file system
 pub struct ProcessFsInfo {
     pub root_mount: Arc<VfsMount>,
     pub root_dir: Arc<DirEntry>,
@@ -38,6 +38,7 @@ pub trait ProcessFs {
 }
 
 #[derive(Default, Debug, Clone)]
+#[repr(C)]
 pub struct VfsTime {
     pub year: u32,
     pub month: u8,
@@ -59,3 +60,30 @@ impl VfsTime {
         }
     }
 }
+
+
+#[derive(Debug)]
+pub enum VfsError{
+    DirNotFound,
+    FileNotFound,
+    FileAlreadyExist,
+    DirNotEmpty,
+    NotDir,
+    DirAlreadyExist,
+    NotFile,
+    NotLink,
+    LinkNotFound,
+    LinkLoop,
+    LinkDepthTooDeep,
+    LinkCountTooMany,
+    InvalidPath,
+    DiskFsError,
+}
+
+impl Display for VfsError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!("VfsError:{:?}",self))
+    }
+}
+
+impl Error for VfsError{}

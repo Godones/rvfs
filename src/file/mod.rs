@@ -216,6 +216,8 @@ fn construct_file(
     let binding = &lookup_data.mnt;
     let sb = &binding.super_block;
     if let Some(file) = sb.find_file(&dentry) {
+        // we reset the file position to 0
+        file.access_inner().f_pos = 0;
         return Ok(file);
     }
     let inode = dentry.access_inner().d_inode.clone();

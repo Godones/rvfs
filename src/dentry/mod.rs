@@ -373,7 +373,7 @@ fn lookup_mount(mnt: Arc<VfsMount>, next_dentry: Arc<DirEntry>) -> StrResult<Arc
         .ok_or("mount not found")
         .map(|x| x.clone())
 }
-/// 读取链接符号内容
+/// read the content of a symbolic link
 /// * `dentry` - 源文件
 /// * `lookup_data` - 查找数据
 pub fn advance_link<T: ProcessFs>(
@@ -559,7 +559,6 @@ pub fn is_dir(inode: Arc<Inode>) -> bool {
 /// * `flag` - rename flag
 /// # description
 /// 1. old_name and new_name must be in the same file system
-/// 2.
 pub fn vfs_rename<T: ProcessFs>(old_name: &str, new_name: &str) -> StrResult<()> {
     ddebug!("vfs_rename");
     if old_name == "/" {
@@ -621,6 +620,7 @@ pub fn vfs_rename<T: ProcessFs>(old_name: &str, new_name: &str) -> StrResult<()>
     )?;
     // after rename, the old dentry is invalid
     // so we need to update the old dentry
+    // warn!("update old dentry");
     old_sub_dentry.access_inner().d_name = new_sub_dentry.access_inner().d_name.clone();
     old_sub_dentry.access_inner().parent = new_sub_dentry.access_inner().parent.clone();
     ddebug!("vfs_rename end");

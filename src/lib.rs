@@ -1,6 +1,7 @@
 #![feature(const_mut_refs)]
 #![feature(const_weak_new)]
-#![no_std]
+#![cfg_attr(not(test), no_std)]
+#![feature(error_in_core)]
 //! virtual file system framework
 
 // use dentry::
@@ -13,6 +14,7 @@ pub mod mount;
 pub mod ramfs;
 pub mod stat;
 pub mod superblock;
+pub mod path;
 
 extern crate alloc;
 extern crate log;
