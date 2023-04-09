@@ -2,6 +2,7 @@ use alloc::collections::VecDeque;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use crate::dentry::{DirEntry, LookUpFlags};
+use crate::inode::{InodeMode};
 use crate::mount::VfsMount;
 use crate::StrResult;
 
@@ -11,6 +12,7 @@ pub fn vfs_lookup_path(dentry:Arc<DirEntry>,mnt:Arc<VfsMount>,path:ParsePathType
     let mut res = VecDeque::new();
     let mut current = dentry;
     let mut mnt = mnt;
+    let is_dir = current.access_inner().d_inode.mode == InodeMode::S_DIR;
     // /f1/f2
     loop {
         let inner = current.access_inner();
@@ -35,7 +37,7 @@ pub fn vfs_lookup_path(dentry:Arc<DirEntry>,mnt:Arc<VfsMount>,path:ParsePathType
             }
         };
         let name = inner.d_name.clone();
-        if name!="/"{
+        if name != "/" {
             res.push_back(name);
             res.push_back("/".to_string());
         }
@@ -46,7 +48,7 @@ pub fn vfs_lookup_path(dentry:Arc<DirEntry>,mnt:Arc<VfsMount>,path:ParsePathType
         current = parent.unwrap();
     }
     // we ignore the first name
-    if res.len() > 1 {
+    if res.len() > 1 && !is_dir {
         res.pop_front();
     }
     let f_path = res.iter().rev().fold(String::new(), |mut acc, x| {

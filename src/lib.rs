@@ -52,7 +52,7 @@ pub fn mount_rootfs() -> Arc<VfsMount> {
         None,
     )
     .unwrap();
-    // 设置进程的文件系统相关信息
+
     GLOBAL_HASH_MOUNT.write().push(mnt.clone());
     ddebug!("init_vfs end");
     mnt

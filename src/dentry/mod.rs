@@ -7,6 +7,7 @@ use alloc::string::ToString;
 use alloc::sync::Arc;
 pub use define::*;
 use log::{debug};
+use crate::file::File;
 
 /// 当删除物理文件时，释放缓存描述符的引用并将其从哈希表中删除
 pub fn remove_dentry_cache(_dentry: Arc<DirEntry>) {
@@ -532,21 +533,45 @@ pub fn vfs_truncate<T: ProcessFs>(file_name: &str, len: usize) -> StrResult<()> 
     ddebug!("vfs_truncate");
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let inode = lookup_data.dentry.access_inner().d_inode.clone();
-    if is_dir(inode.clone()) {
-        return Err("is a directory");
-    }
-    if !mnt_want_write(&lookup_data.mnt) {
-        return Err("read only file system");
-    }
-    // ignore permission
-
-    // modify the inode file_size
-    inode.access_inner().file_size = len;
-    let truncate = inode.inode_ops.truncate;
-    truncate(inode)?;
+    let mnt = lookup_data.mnt.clone();
+    __truncate(inode.clone(),mnt.clone(),len)?;
     ddebug!("vfs_truncate end");
     Ok(())
 }
+
+
+pub fn vfs_truncate_by_file(file: Arc<File>, len: usize) -> StrResult<()> {
+    ddebug!("vfs_truncate_by_file");
+    let inode = file.f_dentry.access_inner().d_inode.clone();
+    let mnt = file.f_mnt.clone();
+    __truncate(inode.clone(),mnt.clone(),len)?;
+    ddebug!("vfs_truncate_by_file end");
+    Ok(())
+}
+
+
+pub fn __truncate(inode:Arc<Inode>,mnt:Arc<VfsMount>,len:usize)->StrResult<()>{
+    ddebug!("__truncate");
+    if is_dir(inode.clone()) {
+        return Err("is a directory");
+    }
+    if !mnt_want_write(&mnt) {
+        return Err("read only file system");
+    }
+    // ignore permission
+    // todo!
+    // modify the inode file_size
+    let old_size = inode.access_inner().file_size;
+    inode.access_inner().file_size = len;
+    let truncate = inode.inode_ops.truncate;
+    truncate(inode.clone()).map_err(|e|{
+        inode.access_inner().file_size = old_size;
+        e
+    })?;
+    ddebug!("__truncate end");
+    Ok(())
+}
+
 
 #[inline(always)]
 pub fn is_dir(inode: Arc<Inode>) -> bool {

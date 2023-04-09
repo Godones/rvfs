@@ -1,3 +1,4 @@
+use alloc::string::{String, ToString};
 use crate::dentry::DirEntry;
 use crate::mount::VfsMount;
 use alloc::sync::Arc;
@@ -77,12 +78,35 @@ pub enum VfsError{
     LinkDepthTooDeep,
     LinkCountTooMany,
     InvalidPath,
-    DiskFsError,
+    NotImpl,
+    DiskFsError(String),
 }
+impl VfsError{
+    pub fn to_string(&self) -> String {
+        match self {
+            VfsError::DirNotFound => "Directory not found".to_string(),
+            VfsError::FileNotFound => "File not found".to_string(),
+            VfsError::FileAlreadyExist => "File already exist".to_string(),
+            VfsError::DirNotEmpty => "Directory not empty".to_string(),
+            VfsError::NotDir => "Not a directory".to_string(),
+            VfsError::DirAlreadyExist => "Directory already exist".to_string(),
+            VfsError::NotFile => "Not a file".to_string(),
+            VfsError::NotLink => "Not a link".to_string(),
+            VfsError::LinkNotFound => "Link not found".to_string(),
+            VfsError::LinkLoop => "Link loop".to_string(),
+            VfsError::LinkDepthTooDeep => "Link depth too deep".to_string(),
+            VfsError::LinkCountTooMany => "Link count too many".to_string(),
+            VfsError::InvalidPath => "Invalid path".to_string(),
+            VfsError::NotImpl => "Not implemented".to_string(),
+            VfsError::DiskFsError(msg) => "Disk fs error: ".to_string() + msg,
+        }
+    }
+}
+
 
 impl Display for VfsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("VfsError:{:?}",self))
+        write!(f, "{}", self.to_string())
     }
 }
 
