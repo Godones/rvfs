@@ -64,23 +64,24 @@ impl File {
 
 bitflags! {
     pub struct OpenFlags:u32{
-        const O_RDONLY = 0;
-        const O_WRONLY = 1;
-        const O_RDWR = 2;
-        const O_CREAT = 0100;
-        const O_EXCL = 0200;
-        const O_NOCTTY = 0400;
-        const O_TRUNC = 01000;
-        const O_APPEND = 02000;
-        const O_NONBLOCK = 04000;
-        const O_NOFOLLOW = 0400000;
-        const O_DIRECTORY = 0200000;
+        const O_RDONLY = 0x0;
+        const O_WRONLY = 0x1;
+        const O_RDWR = 0x2;
+        const O_CREAT = 0x40;
+        const O_EXCL = 0x200;
+        const O_NOCTTY = 0x400;
+        const O_TRUNC = 0x1000;
+        const O_APPEND = 0x2000;
+        const O_NONBLOCK = 0x4000;
+        const O_NOFOLLOW = 0x400000;
+        const O_DIRECTORY = 0x200000;
     }
 }
 bitflags! {
     pub struct FileMode:u32{
-        const FMODE_READ = 0x1;
-        const FMODE_WRITE = 0x3;
+        const FMODE_READ = 0x0;
+        const FMODE_WRITE = 0x1;
+        const FMODE_RDWR = 0x2;
         const FMODE_EXEC = 0x5; //read and execute
     }
 }
@@ -144,6 +145,7 @@ pub struct FileOps {
     // 用户调用它来刷新待处理的数据。
     // 如果驱动程序没有实现这一方法，fsync系统调用将返回-EINVAL。
     pub fsync: fn(file: Arc<File>, datasync: bool) -> StrResult<()>,
+    pub release:fn(file:Arc<File>)->StrResult<()>,
 }
 
 impl Debug for FileOps {
@@ -162,8 +164,9 @@ impl FileOps {
             ioctl: |_, _, _, _| Err("Not support"),
             mmap: |_, _| Err("Not support"),
             open: |_| Err("Not support"),
-            flush: |_| Err("Not support"),
-            fsync: |_, _| Err("Not support"),
+            flush: |_| Ok(()),
+            fsync: |_, _| Ok(()),
+            release: |_|Ok(())
         }
     }
 }

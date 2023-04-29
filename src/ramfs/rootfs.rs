@@ -81,12 +81,14 @@ const ROOTFS_FILE_FILE_OPS: FileOps = {
     ops.read = rootfs_read_file;
     ops.write = rootfs_write_file;
     ops.open = |_| Ok(());
+    ops.release = rootfs_release;
     ops
 };
 
 const ROOTFS_SYMLINK_FILE_OPS: FileOps = {
     let mut ops = FileOps::empty();
     ops.open = |_| Ok(());
+    ops.release = rootfs_release;
     ops
 };
 
@@ -94,6 +96,7 @@ const ROOTFS_DIR_FILE_OPS: FileOps = {
     let mut ops = FileOps::empty();
     ops.readdir = rootfs_readdir;
     ops.open = |_| Ok(());
+    ops.release = rootfs_release;
     ops
 };
 
@@ -364,5 +367,14 @@ fn rootfs_rename(
         new_dir.access_inner().file_size += 1;
     }
     ddebug!("rootfs_rename end");
+    Ok(())
+}
+
+
+
+
+fn rootfs_release(file:Arc<File>)->StrResult<()>{
+    assert_eq!(Arc::strong_count(&file), 1);
+    ddebug!("rootfs_release");
     Ok(())
 }

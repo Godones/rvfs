@@ -40,7 +40,7 @@ pub struct Inode {
     pub mode: InodeMode,
     /// 超级块引用
     pub super_blk: Weak<SuperBlock>,
-    inner: Mutex<InodeInner>,
+    pub inner: Mutex<InodeInner>,
 }
 
 #[derive(Debug)]
@@ -57,6 +57,14 @@ pub struct InodeInner {
     pub file_size: usize,
     /// private data
     pub data: Option<Box<dyn DataOps>>,
+    pub special_data: Option<SpecialData>,
+}
+
+#[derive(Debug)]
+pub enum SpecialData{
+    PipeData(*const u8),
+    CharData(*const u8),
+    BlockData(*const u8),
 }
 
 impl Inode {
@@ -77,6 +85,7 @@ impl Inode {
                 gid: 0,
                 file_size: 0,
                 data: None,
+                special_data: None,
             }),
         }
     }
@@ -107,6 +116,7 @@ impl Inode {
                 gid: 0,
                 file_size: 0,
                 data: None,
+                special_data: None,
             }),
         };
         inode

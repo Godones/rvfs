@@ -29,13 +29,54 @@ pub fn vfs_open_file<T: ProcessFs>(
     construct_file(&mut lookup_data, flags, mode)
 }
 
+
+fn construct_file(
+    lookup_data: &LookUpData,
+    flags: OpenFlags,
+    mode: FileMode,
+) -> StrResult<Arc<File>> {
+    ddebug!("construct_file");
+    let dentry = lookup_data.dentry.clone();
+    // flags include directory
+    let binding = &lookup_data.mnt;
+    let sb = &binding.super_block;
+    if let Some(file) = sb.find_file(&dentry) {
+        // we reset the file position to 0
+        file.access_inner().f_pos = 0;
+        return Ok(file);
+    }
+    let inode = dentry.access_inner().d_inode.clone();
+    let f_ops = inode.file_ops.clone();
+    let open = f_ops.open;
+    let file = File::new(dentry, lookup_data.mnt.clone(), flags, mode, f_ops);
+    let file = Arc::new(file);
+    // TODO impl open in inodeops
+    let res = open(file.clone());
+    if res.is_err() {
+        return Err(res.err().unwrap());
+    }
+    // 将文件放入超级块的文件表中
+    sb.insert_file(file.clone());
+    ddebug!("construct_file end");
+    Ok(file)
+}
+
 pub fn vfs_close_file<T: ProcessFs>(file: Arc<File>) -> StrResult<()> {
+    ddebug!("close_file");
     // 调用文件的flush方法，只有少数驱动才会设置这个方法。
     let flush = file.f_ops.flush;
     flush(file.clone())?;
     let sb = &file.f_mnt;
     let sb = &sb.super_block;
     sb.remove_file(file.clone());
+
+    // warn!("strong count: {}", Arc::strong_count(&file));
+    if Arc::strong_count(&file) == 1 {
+        let release = file.f_ops.release;
+        // The release method is called when the file's reference count reaches 1
+        release(file)?;
+    }
+    ddebug!("close_file end");
     Ok(())
 }
 
@@ -78,7 +119,7 @@ pub fn vfs_read_file<T: ProcessFs>(
 pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
     let write = file.f_ops.write;
     let mode = file.f_mode;
-    if !mode.contains(FileMode::FMODE_WRITE) {
+    if !mode.contains(FileMode::FMODE_WRITE)&&!mode.contains(FileMode::FMODE_RDWR){
         return Err("file not open for writing");
     }
     // check whether file is valid
@@ -195,6 +236,11 @@ pub fn vfs_readdir(file: Arc<File>) -> StrResult<DirContext> {
     readdir(file)
 }
 
+// pub fn vfs_readdir1(file:Arc<File>,buf:&mut [u8]) -> StrResult<usize> {
+//     // let readdir1 = file.f_ops.readdir1;
+//     // readdir1(file,buf)
+// }
+
 pub fn vfs_fsync(file: Arc<File>) -> StrResult<()> {
     // check file mode
     let mode = file.f_mode;
@@ -205,36 +251,7 @@ pub fn vfs_fsync(file: Arc<File>) -> StrResult<()> {
     fsync(file, true)
 }
 
-fn construct_file(
-    lookup_data: &LookUpData,
-    flags: OpenFlags,
-    mode: FileMode,
-) -> StrResult<Arc<File>> {
-    ddebug!("construct_file");
-    let dentry = lookup_data.dentry.clone();
-    // 将文件放入超级块的文件表中
-    let binding = &lookup_data.mnt;
-    let sb = &binding.super_block;
-    if let Some(file) = sb.find_file(&dentry) {
-        // we reset the file position to 0
-        file.access_inner().f_pos = 0;
-        return Ok(file);
-    }
-    let inode = dentry.access_inner().d_inode.clone();
-    let f_ops = inode.file_ops.clone();
-    let open = f_ops.open;
-    let file = File::new(dentry, lookup_data.mnt.clone(), flags, mode, f_ops);
-    let file = Arc::new(file);
-    // TODO impl open in inodeops
-    let res = open(file.clone());
-    if res.is_err() {
-        return Err(res.err().unwrap());
-    }
-    // 将文件放入超级块的文件表中
-    sb.insert_file(file.clone());
-    ddebug!("construct_file end");
-    Ok(file)
-}
+
 
 impl From<OpenFlags> for LookUpFlags {
     fn from(val: OpenFlags) -> Self {

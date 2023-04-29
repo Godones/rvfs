@@ -51,12 +51,18 @@ pub fn vfs_lookup_path(dentry:Arc<DirEntry>,mnt:Arc<VfsMount>,path:ParsePathType
     if res.len() > 1 && !is_dir {
         res.pop_front();
     }
+
+    if res.front().unwrap() != "/"{
+        res.push_front("/".to_string());
+    }
+
     let f_path = res.iter().rev().fold(String::new(), |mut acc, x| {
         acc.push_str(x);
         acc
     });
     // the path is relative
     assert!(path.is_relative());
+
     let res = stitching_path(f_path,path.path());
     if res.is_none() {
         return Err("path error");

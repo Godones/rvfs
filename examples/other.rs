@@ -1,3 +1,4 @@
+use std::mem::size_of;
 use rvfs::file::{
     vfs_mkdir, vfs_open_file, vfs_readdir, OpenFlags, FileMode,
 };
@@ -7,6 +8,7 @@ use rvfs::dentry::LookUpFlags;
 use rvfs::mount::{do_mount, MountFlags};
 use rvfs::path::{ParsePathType, vfs_lookup_path};
 use rvfs::ramfs::tmpfs::tmp_fs_type;
+use rvfs::stat::KStat;
 
 fn main() {
     env_logger::init();
@@ -41,4 +43,5 @@ fn main() {
     // let stat = vfs_getattr::<FakeFSC>("/fs/tmpfs/f1").unwrap();
     // println!("stat: {:#?}", stat);
 
+    println!("size of kstat: {}",size_of::<KStat>())
 }
