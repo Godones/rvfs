@@ -1,8 +1,5 @@
 mod define;
-use crate::dentry::{
-    advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry, LookUpData,
-    LookUpFlags, PathType,
-};
+use crate::dentry::{advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry, LookUpData, LookUpFlags, PathType, DirentType, Dirent64};
 use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeMode};
 use crate::{ddebug, StrResult};
@@ -236,10 +233,36 @@ pub fn vfs_readdir(file: Arc<File>) -> StrResult<DirContext> {
     readdir(file)
 }
 
-// pub fn vfs_readdir1(file:Arc<File>,buf:&mut [u8]) -> StrResult<usize> {
-//     // let readdir1 = file.f_ops.readdir1;
-//     // readdir1(file,buf)
-// }
+
+/// the buf contains serveral dirents
+pub fn vfs_readdir1(file:Arc<File>,buf:&mut [u8]) -> StrResult<usize> {
+    let readdir = file.f_ops.readdir;
+    let res = readdir(file.clone())?;
+    let mut count = 0;
+
+    let mut ptr = buf.as_mut_ptr();
+
+    res.enumerate().for_each(|(index, mut name)|{
+        let ino = file.f_dentry.access_inner().d_inode.number;
+        let type_ = DirentType::from(file.f_dentry.access_inner().d_inode.mode);
+        let dirent = Dirent64::new(&name, ino as u64, index as i64, type_);
+        let dirent_ptr = unsafe{
+            &mut *(ptr as *mut Dirent64)
+        };
+        *dirent_ptr = dirent;
+        let name_ptr = dirent_ptr.name.as_mut_ptr();
+        unsafe {
+            name.push('\0');
+            let len = name.len();
+            name_ptr.copy_from(name.as_ptr(),len);
+            ptr = ptr.add(dirent_ptr.len());
+        }
+        count += dirent_ptr.len();
+
+    });
+    Ok(count)
+}
+
 
 pub fn vfs_fsync(file: Arc<File>) -> StrResult<()> {
     // check file mode

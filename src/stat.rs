@@ -28,24 +28,24 @@ pub struct FileAttribute {
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct KStat {
-    st_dev:u64,
-    st_ino:u64,
-    st_mode:u32,
-    st_nlink:u32,
-    st_uid:u32,
-    st_gid:u32,
-    st_rdev:u64,
+    pub st_dev:u64,
+    pub st_ino:u64,
+    pub st_mode:u32,
+    pub st_nlink:u32,
+    pub st_uid:u32,
+    pub st_gid:u32,
+    pub st_rdev:u64,
     __pad:u64,
-    st_size:u64,
-    st_blksize:u32,
+    pub st_size:u64,
+    pub st_blksize:u32,
     __pad2:u32,
-    st_blocks:u64,
-    st_atime_sec:u64,
-    st_atime_nsec:u64,
-    st_mtime_sec:u64,
-    st_mtime_nsec:u64,
-    st_ctime_sec:u64,
-    st_ctime_nsec:u64,
+    pub st_blocks:u64,
+    pub st_atime_sec:u64,
+    pub st_atime_nsec:u64,
+    pub st_mtime_sec:u64,
+    pub st_mtime_nsec:u64,
+    pub st_ctime_sec:u64,
+    pub st_ctime_nsec:u64,
     unused:u64,
 } //128
 
@@ -71,6 +71,15 @@ fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
     let inode = inode;
 
     let inner = inode.access_inner();
+
+    // TODO！ update dir size
+    const PER_DIR_ENTRY_SIZE: usize = 256;
+
+    let size = match inode.mode {
+        InodeMode::S_DIR => inner.file_size * PER_DIR_ENTRY_SIZE,
+        _ => inner.file_size,
+    };
+
     KStat{
         st_dev: sb_blk.dev_desc as u64,
         st_ino: inode.number as u64,
@@ -80,7 +89,7 @@ fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
         st_gid: inner.gid,
         st_rdev: 0,
         __pad: 0,
-        st_size: inner.file_size as u64,
+        st_size: size as u64,
         st_blksize: inode.blk_size,
         __pad2: 0,
         st_blocks: (inner.file_size / sb_blk.block_size as usize) as u64,

@@ -15,6 +15,7 @@ pub mod ramfs;
 pub mod stat;
 pub mod superblock;
 pub mod path;
+pub mod error;
 
 extern crate alloc;
 extern crate log;

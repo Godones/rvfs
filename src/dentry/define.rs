@@ -135,6 +135,93 @@ impl DirEntryOps {
     }
 }
 
+
+
+#[repr(C)]
+pub struct Dirent64{
+    /// ino is an inode number
+    pub ino:u64,
+    /// off is an offset to next linux_dirent
+    pub off:i64,
+    /// reclen is the length of this linux_dirent
+    pub reclen:u16,
+    /// type is the file type
+    pub type_:u8,
+    /// name is the filename (null-terminated)
+    pub name:[u8;0],
+}
+
+impl Debug for Dirent64{
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let name = self.name.as_ptr();
+        unsafe {
+            let name = core::ffi::CStr::from_ptr(name as *const i8);
+            f.debug_struct("Dirent64")
+                .field("ino",&self.ino)
+                .field("off",&self.off)
+                .field("reclen",&self.reclen)
+                .field("type",&self.type_)
+                .field("name",&name)
+                .finish()
+        }
+    }
+}
+
+
+impl Dirent64{
+    pub fn new(name:&str,ino:u64,off:i64,type_:DirentType)->Self{
+        let size = core::mem::size_of::<Self>() + name.len() + 1;
+        Self{
+            ino,
+            off,
+            reclen:size as u16,
+            type_:type_.bits(),
+            name:[0;0],
+        }
+    }
+    pub fn get_name(&self)->&str{
+        unsafe {
+            let name = self.name.as_ptr();
+            let name = core::ffi::CStr::from_ptr(name as *const i8);
+            name.to_str().unwrap()
+        }
+    }
+    pub fn len(&self)->usize{
+        self.reclen as usize
+    }
+}
+
+bitflags! {
+    pub struct DirentType:u8{
+        const DT_UNKNOWN = 0;
+        const DT_FIFO = 1;
+        const DT_CHR = 2;
+        const DT_DIR = 4;
+        const DT_BLK = 6;
+        const DT_REG = 8;
+        const DT_LNK = 10;
+        const DT_SOCK = 12;
+        const DT_WHT = 14;
+    }
+}
+
+
+impl From<InodeMode> for DirentType {
+    fn from(value: InodeMode) -> Self {
+        match value {
+            InodeMode::S_SYMLINK => DirentType::DT_LNK,
+            InodeMode::S_DIR => DirentType::DT_DIR,
+            InodeMode::S_FILE => DirentType::DT_REG,
+            _ => DirentType::DT_UNKNOWN,
+        }
+    }
+}
+
+
+
+
+
+
 #[derive(Debug)]
 pub struct DirContext {
     pub pos: usize,
