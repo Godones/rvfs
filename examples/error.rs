@@ -13,7 +13,7 @@ fn main(){
     vfs_open_file::<FakeFSC>("/fddd", OpenFlags::O_RDWR|OpenFlags::O_CREAT, FileMode::FMODE_WRITE).unwrap();
     vfs_open_file::<FakeFSC>("/123123", OpenFlags::O_RDWR|OpenFlags::O_CREAT, FileMode::FMODE_WRITE).unwrap();
 
-    let root = vfs_open_file::<FakeFSC>("/", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
+    let root = vfs_open_file::<FakeFSC>(".", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
 
     let stat = vfs_getattr_by_file(root.clone()).unwrap();
     println!("stat: {:#?}", stat);

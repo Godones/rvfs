@@ -97,9 +97,9 @@ fn stitching_path(f_path:String,s_path:String)->Option<String>{
         let new_path = f_path[..=index].to_string();
         stitching_path(new_path,s_path[3..].to_string())
     }else{
-        return if s_path.starts_with(".") {
+        return if s_path.eq(".") {
             // we think it is error
-            None
+            Some(f_path)
         } else {
             // it is a relative path
             Some(f_path  + s_path.as_str())
@@ -183,5 +183,14 @@ mod test{
         let res = super::stitching_path(f_path,s_path);
         assert!(res.is_some());
         assert_eq!(res.unwrap(),"/bin/mytool/t1".to_string());
+    }
+
+    #[test]
+    fn test_stitching_path5(){
+        let f_path = "/bin/mytool/".to_string();
+        let s_path = ".".to_string();
+        let res = super::stitching_path(f_path,s_path);
+        assert!(res.is_some());
+        assert_eq!(res.unwrap(),"/bin/mytool/".to_string());
     }
 }
