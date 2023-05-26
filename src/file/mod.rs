@@ -242,10 +242,17 @@ pub fn vfs_readdir1(file:Arc<File>,buf:&mut [u8]) -> StrResult<usize> {
 
     let mut ptr = buf.as_mut_ptr();
 
+    let buf_len = buf.len();
+
     res.enumerate().for_each(|(index, mut name)|{
         let ino = file.f_dentry.access_inner().d_inode.number;
         let type_ = DirentType::from(file.f_dentry.access_inner().d_inode.mode);
         let dirent = Dirent64::new(&name, ino as u64, index as i64, type_);
+
+        if dirent.len() + count > buf_len {
+            return;
+        }
+
         let dirent_ptr = unsafe{
             &mut *(ptr as *mut Dirent64)
         };
