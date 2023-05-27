@@ -242,7 +242,7 @@ pub fn vfs_readdir1(file:Arc<File>,buf:&mut [u8]) -> StrResult<usize> {
     let buf_len = buf.len();
     // if the buf len is zero,we return the size of all dirents
     if buf_len == 0{
-        Ok(res.len())
+        return Ok(res.len())
     }
     let mut ptr = buf.as_mut_ptr();
 
