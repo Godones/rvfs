@@ -5,6 +5,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::bitflags;
+use core::ffi::c_char;
 use core::fmt::{Debug, Formatter};
 use spin::{Mutex, MutexGuard};
 bitflags! {
@@ -135,58 +136,57 @@ impl DirEntryOps {
     }
 }
 
-
-
 #[repr(C)]
-pub struct Dirent64{
+pub struct Dirent64 {
     /// ino is an inode number
-    pub ino:u64,
+    pub ino: u64,
     /// off is an offset to next linux_dirent
-    pub off:i64,
+    pub off: i64,
     /// reclen is the length of this linux_dirent
-    pub reclen:u16,
+    pub reclen: u16,
     /// type is the file type
-    pub type_:DirentType,
+    pub type_: DirentType,
     /// name is the filename (null-terminated)
-    pub name:[u8;0],
+    pub name: [u8; 0],
 }
 
-impl Debug for Dirent64{
+impl Debug for Dirent64 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         let name = self.name.as_ptr();
         unsafe {
-            let name = core::ffi::CStr::from_ptr(name as *const i8);
+            let name = core::ffi::CStr::from_ptr(name as *const c_char)
+                .to_str()
+                .unwrap();
             f.debug_struct("Dirent64")
-                .field("ino",&self.ino)
-                .field("off",&self.off)
-                .field("reclen",&self.reclen)
-                .field("type",&self.type_)
-                .field("name",&name)
+                .field("ino", &self.ino)
+                .field("off", &self.off)
+                .field("reclen", &self.reclen)
+                .field("type", &self.type_)
+                .field("name", &name)
                 .finish()
         }
     }
 }
 
-
-impl Dirent64{
-    pub fn new(name:&str,ino:u64,off:i64,type_:DirentType)->Self{
+impl Dirent64 {
+    pub fn new(name: &str, ino: u64, off: i64, type_: DirentType) -> Self {
         let size = core::mem::size_of::<Self>() + name.len() + 1;
-        Self{
+        Self {
             ino,
             off,
-            reclen:size as u16,
+            reclen: size as u16,
             type_,
-            name:[0;0],
+            name: [0; 0],
         }
     }
-    pub fn get_name(&self)->&str{
+    pub fn get_name(&self) -> &str {
         unsafe {
             let name = self.name.as_ptr();
             let name = core::ffi::CStr::from_ptr(name as *const i8);
             name.to_str().unwrap()
         }
     }
-    pub fn len(&self)->usize{
+    pub fn len(&self) -> usize {
         self.reclen as usize
     }
 }
@@ -205,7 +205,6 @@ bitflags! {
     }
 }
 
-
 impl From<InodeMode> for DirentType {
     fn from(value: InodeMode) -> Self {
         match value {
@@ -216,11 +215,6 @@ impl From<InodeMode> for DirentType {
         }
     }
 }
-
-
-
-
-
 
 #[derive(Debug)]
 pub struct DirContext {

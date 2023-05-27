@@ -17,7 +17,7 @@ use core::cmp::min;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
-use log::{debug};
+use log::debug;
 use spin::Mutex;
 
 static INODE_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -370,10 +370,7 @@ fn rootfs_rename(
     Ok(())
 }
 
-
-
-
-fn rootfs_release(file:Arc<File>)->StrResult<()>{
+fn rootfs_release(file: Arc<File>) -> StrResult<()> {
     assert_eq!(Arc::strong_count(&file), 1);
     ddebug!("rootfs_release");
     Ok(())

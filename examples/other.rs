@@ -1,14 +1,12 @@
-use std::mem::size_of;
-use rvfs::file::{
-    vfs_mkdir, vfs_open_file, vfs_readdir, OpenFlags, FileMode,
-};
-use rvfs::superblock::{register_filesystem};
-use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 use rvfs::dentry::LookUpFlags;
+use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_readdir, FileMode, OpenFlags};
 use rvfs::mount::{do_mount, MountFlags};
-use rvfs::path::{ParsePathType, vfs_lookup_path};
+use rvfs::path::{vfs_lookup_path, ParsePathType};
 use rvfs::ramfs::tmpfs::tmp_fs_type;
 use rvfs::stat::KStat;
+use rvfs::superblock::register_filesystem;
+use rvfs::{init_process_info, mount_rootfs, FakeFSC};
+use std::mem::size_of;
 
 fn main() {
     env_logger::init();
@@ -23,25 +21,44 @@ fn main() {
     register_filesystem(tmp_fs_type()).unwrap();
     println!("register tmpfs ok ......");
     println!("test do_mount");
-    let tmpfs = do_mount::<FakeFSC>("", "/fs/tmpfs", "tmpfs", MountFlags::MNT_NO_DEV, None).unwrap();
+    let tmpfs =
+        do_mount::<FakeFSC>("", "/fs/tmpfs", "tmpfs", MountFlags::MNT_NO_DEV, None).unwrap();
     println!("mnt: {:#?}", tmpfs);
     println!("test do_mount ok ......");
-    let file = vfs_open_file::<FakeFSC>("/fs/tmpfs/f1", OpenFlags::O_RDWR|OpenFlags::O_CREAT, FileMode::FMODE_WRITE).unwrap();
+    let file = vfs_open_file::<FakeFSC>(
+        "/fs/tmpfs/f1",
+        OpenFlags::O_RDWR | OpenFlags::O_CREAT,
+        FileMode::FMODE_WRITE,
+    )
+    .unwrap();
     println!("file: {:#?}", file);
     let dentry = file.f_dentry.clone();
-    let path = vfs_lookup_path(dentry,file.f_mnt.clone(),ParsePathType::Relative("./f2".to_string()),LookUpFlags::empty());
+    let path = vfs_lookup_path(
+        dentry,
+        file.f_mnt.clone(),
+        ParsePathType::Relative("./f2".to_string()),
+        LookUpFlags::empty(),
+    );
     println!("path: {:#?}", path);
 
     let root = vfs_open_file::<FakeFSC>("/", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
-    vfs_readdir(root.clone()).unwrap().into_iter().for_each(|name| {
-        println!("name: {}", name);
-    });
+    vfs_readdir(root.clone())
+        .unwrap()
+        .into_iter()
+        .for_each(|name| {
+            println!("name: {}", name);
+        });
     let root_dentry = root.f_dentry.clone();
-    let path = vfs_lookup_path(root_dentry,root.f_mnt.clone(),ParsePathType::Relative("./fs/tmpfs/f1".to_string()),LookUpFlags::empty());
+    let path = vfs_lookup_path(
+        root_dentry,
+        root.f_mnt.clone(),
+        ParsePathType::Relative("./fs/tmpfs/f1".to_string()),
+        LookUpFlags::empty(),
+    );
     println!("path: {:#?}", path);
 
     // let stat = vfs_getattr::<FakeFSC>("/fs/tmpfs/f1").unwrap();
     // println!("stat: {:#?}", stat);
 
-    println!("size of kstat: {}",size_of::<KStat>())
+    println!("size of kstat: {}", size_of::<KStat>())
 }

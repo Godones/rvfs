@@ -4,8 +4,8 @@ use crate::superblock::{DataOps, Device, StatFs, SuperBlock};
 use crate::{ddebug, StrResult};
 use alloc::boxed::Box;
 use alloc::sync::{Arc, Weak};
-use core::cmp::min;
 use bitflags::bitflags;
+use core::cmp::min;
 use core::fmt::{Debug, Formatter};
 use spin::{Mutex, MutexGuard};
 
@@ -61,7 +61,7 @@ pub struct InodeInner {
 }
 
 #[derive(Debug)]
-pub enum SpecialData{
+pub enum SpecialData {
     PipeData(*const u8),
     CharData(*const u8),
     BlockData(*const u8),
@@ -201,7 +201,7 @@ impl From<&[u8]> for InodeMode {
 }
 
 pub fn simple_statfs(sb_blk: Arc<SuperBlock>) -> StrResult<StatFs> {
-    let mut name = [0u8;32];
+    let mut name = [0u8; 32];
     let fs_type = sb_blk.file_system_type.upgrade().unwrap();
     let fs_type = fs_type.name.as_bytes();
     let min = min(fs_type.len(), name.len());

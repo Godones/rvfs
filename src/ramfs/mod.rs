@@ -404,4 +404,3 @@ fn ramfs_follow_link(ram_inode: &RamFsInode, lookup_data: &mut LookUpData) -> St
     ddebug!("ramfs_follow_link end");
     Ok(())
 }
-

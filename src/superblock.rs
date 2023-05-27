@@ -180,7 +180,7 @@ pub struct StatFs {
     pub free_blocks: u64,
     pub total_inodes: u64,
     pub name_len: u32,
-    pub name: [u8;32],
+    pub name: [u8; 32],
 }
 
 /// 文件系统类型

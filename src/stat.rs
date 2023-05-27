@@ -1,7 +1,7 @@
 use crate::dentry::{path_walk, LookUpFlags};
-use crate::file::{vfs_open_file, OpenFlags, FileMode, File};
+use crate::file::{vfs_open_file, File, FileMode, OpenFlags};
 use crate::info::{ProcessFs, VfsTime};
-use crate::inode::{Inode, InodeMode, simple_statfs};
+use crate::inode::{simple_statfs, Inode, InodeMode};
 use crate::superblock::StatFs;
 use crate::{ddebug, StrResult};
 use alloc::sync::Arc;
@@ -28,29 +28,29 @@ pub struct FileAttribute {
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct KStat {
-    pub st_dev:u64,
-    pub st_ino:u64,
-    pub st_mode:u32,
-    pub st_nlink:u32,
-    pub st_uid:u32,
-    pub st_gid:u32,
-    pub st_rdev:u64,
-    __pad:u64,
-    pub st_size:u64,
-    pub st_blksize:u32,
-    __pad2:u32,
-    pub st_blocks:u64,
-    pub st_atime_sec:u64,
-    pub st_atime_nsec:u64,
-    pub st_mtime_sec:u64,
-    pub st_mtime_nsec:u64,
-    pub st_ctime_sec:u64,
-    pub st_ctime_nsec:u64,
-    unused:u64,
+    pub st_dev: u64,
+    pub st_ino: u64,
+    pub st_mode: u32,
+    pub st_nlink: u32,
+    pub st_uid: u32,
+    pub st_gid: u32,
+    pub st_rdev: u64,
+    __pad: u64,
+    pub st_size: u64,
+    pub st_blksize: u32,
+    __pad2: u32,
+    pub st_blocks: u64,
+    pub st_atime_sec: u64,
+    pub st_atime_nsec: u64,
+    pub st_mtime_sec: u64,
+    pub st_mtime_nsec: u64,
+    pub st_ctime_sec: u64,
+    pub st_ctime_nsec: u64,
+    unused: u64,
 } //128
 
 /// get file attribute
-pub fn vfs_getattr<T: ProcessFs>(file_name: &str,flag:StatFlags) -> StrResult<KStat> {
+pub fn vfs_getattr<T: ProcessFs>(file_name: &str, flag: StatFlags) -> StrResult<KStat> {
     // now we ignore flag
     assert!(flag.is_empty());
     let file = vfs_open_file::<T>(file_name, OpenFlags::O_RDONLY, FileMode::FMODE_READ)?;
@@ -80,7 +80,7 @@ fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
         _ => inner.file_size,
     };
 
-    KStat{
+    KStat {
         st_dev: sb_blk.dev_desc as u64,
         st_ino: inode.number as u64,
         st_mode: inode.mode.bits(),
@@ -103,7 +103,6 @@ fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
     }
 }
 
-
 /// get file system info according to file name
 pub fn vfs_statfs<T: ProcessFs>(file_name: &str) -> StrResult<StatFs> {
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
@@ -111,9 +110,14 @@ pub fn vfs_statfs<T: ProcessFs>(file_name: &str) -> StrResult<StatFs> {
     simple_statfs(sb_blk)
 }
 
-
 pub fn vfs_statfs_by_file(file: Arc<File>) -> StrResult<StatFs> {
-    let sb_blk = file.f_dentry.access_inner().d_inode.super_blk.upgrade().unwrap();
+    let sb_blk = file
+        .f_dentry
+        .access_inner()
+        .d_inode
+        .super_blk
+        .upgrade()
+        .unwrap();
     simple_statfs(sb_blk)
 }
 
@@ -151,12 +155,7 @@ pub fn vfs_getxattr<T: ProcessFs>(
     Ok(len)
 }
 
-
-pub fn vfs_getxattr_by_file(
-    file:Arc<File>,
-    key: &str,
-    value: &mut [u8],
-) -> StrResult<usize> {
+pub fn vfs_getxattr_by_file(file: Arc<File>, key: &str, value: &mut [u8]) -> StrResult<usize> {
     ddebug!("vfs_getxattr_by_file");
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let get_attr = inode.inode_ops.get_attr;
@@ -164,7 +163,6 @@ pub fn vfs_getxattr_by_file(
     ddebug!("vfs_getxattr_by_file end");
     Ok(len)
 }
-
 
 pub fn vfs_removexattr<T: ProcessFs>(file_name: &str, key: &str) -> StrResult<()> {
     ddebug!("vfs_removexattr");
@@ -185,7 +183,6 @@ pub fn vfs_removexattr_by_file(file: Arc<File>, key: &str) -> StrResult<()> {
     Ok(())
 }
 
-
 pub fn vfs_listxattr<T: ProcessFs>(file_name: &str, buf: &mut [u8]) -> StrResult<usize> {
     ddebug!("vfs_listxattr");
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
@@ -196,7 +193,7 @@ pub fn vfs_listxattr<T: ProcessFs>(file_name: &str, buf: &mut [u8]) -> StrResult
     Ok(len)
 }
 
-pub fn vfs_listxattr_by_file(file:Arc<File>,buf:&mut [u8])->StrResult<usize>{
+pub fn vfs_listxattr_by_file(file: Arc<File>, buf: &mut [u8]) -> StrResult<usize> {
     ddebug!("vfs_listxattr_by_file");
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let list_attr = inode.inode_ops.list_attr;
@@ -204,7 +201,6 @@ pub fn vfs_listxattr_by_file(file:Arc<File>,buf:&mut [u8])->StrResult<usize>{
     ddebug!("vfs_listxattr_by_file end");
     Ok(len)
 }
-
 
 bitflags! {
     pub struct StatFlags:u32{

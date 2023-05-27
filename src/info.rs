@@ -1,6 +1,6 @@
-use alloc::string::{String, ToString};
 use crate::dentry::DirEntry;
 use crate::mount::VfsMount;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use core::error::Error;
 use core::fmt::{Display, Formatter};
@@ -62,9 +62,8 @@ impl VfsTime {
     }
 }
 
-
 #[derive(Debug)]
-pub enum VfsError{
+pub enum VfsError {
     DirNotFound,
     FileNotFound,
     FileAlreadyExist,
@@ -81,7 +80,7 @@ pub enum VfsError{
     NotImpl,
     DiskFsError(String),
 }
-impl VfsError{
+impl VfsError {
     pub fn to_string(&self) -> String {
         match self {
             VfsError::DirNotFound => "Directory not found".to_string(),
@@ -103,11 +102,10 @@ impl VfsError{
     }
 }
 
-
 impl Display for VfsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
 
-impl Error for VfsError{}
+impl Error for VfsError {}

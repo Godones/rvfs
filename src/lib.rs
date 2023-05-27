@@ -6,16 +6,16 @@
 
 // use dentry::
 pub mod dentry;
+pub mod error;
 pub mod file;
 pub mod info;
 pub mod inode;
 pub mod link;
 pub mod mount;
+pub mod path;
 pub mod ramfs;
 pub mod stat;
 pub mod superblock;
-pub mod path;
-pub mod error;
 
 extern crate alloc;
 extern crate log;

@@ -1,4 +1,5 @@
 mod define;
+use crate::file::File;
 use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeFlags, InodeMode};
 use crate::mount::{mnt_want_write, VfsMount};
@@ -6,8 +7,7 @@ use crate::{ddebug, StrResult, GLOBAL_HASH_MOUNT};
 use alloc::string::ToString;
 use alloc::sync::Arc;
 pub use define::*;
-use log::{debug};
-use crate::file::File;
+use log::debug;
 
 /// 当删除物理文件时，释放缓存描述符的引用并将其从哈希表中删除
 pub fn remove_dentry_cache(_dentry: Arc<DirEntry>) {
@@ -223,8 +223,7 @@ fn recede_parent<T: ProcessFs>(
         // TODO 获取当前进程文件系统上下文的锁，防止线程修改根目录
         let process_fs = T::get_fs_info();
         // 如果当前目录是根目录，那么不需要回退
-        if Arc::ptr_eq(&process_fs.root_dir, t_dentry)
-            && Arc::ptr_eq(t_mnt, &process_fs.root_mount)
+        if Arc::ptr_eq(&process_fs.root_dir, t_dentry) && Arc::ptr_eq(t_mnt, &process_fs.root_mount)
         {
             break;
         }
@@ -248,7 +247,7 @@ fn recede_parent<T: ProcessFs>(
     }
     ddebug!("recede_parent ok");
     // 处理父目录也是安装点的情况
-    advance_mount(t_mnt,  t_dentry)
+    advance_mount(t_mnt, t_dentry)
 }
 
 /// 在当前目录中搜索指定文件
@@ -534,23 +533,21 @@ pub fn vfs_truncate<T: ProcessFs>(file_name: &str, len: usize) -> StrResult<()> 
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let inode = lookup_data.dentry.access_inner().d_inode.clone();
     let mnt = lookup_data.mnt.clone();
-    __truncate(inode.clone(),mnt.clone(),len)?;
+    __truncate(inode.clone(), mnt.clone(), len)?;
     ddebug!("vfs_truncate end");
     Ok(())
 }
-
 
 pub fn vfs_truncate_by_file(file: Arc<File>, len: usize) -> StrResult<()> {
     ddebug!("vfs_truncate_by_file");
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let mnt = file.f_mnt.clone();
-    __truncate(inode.clone(),mnt.clone(),len)?;
+    __truncate(inode.clone(), mnt.clone(), len)?;
     ddebug!("vfs_truncate_by_file end");
     Ok(())
 }
 
-
-pub fn __truncate(inode:Arc<Inode>,mnt:Arc<VfsMount>,len:usize)->StrResult<()>{
+pub fn __truncate(inode: Arc<Inode>, mnt: Arc<VfsMount>, len: usize) -> StrResult<()> {
     ddebug!("__truncate");
     if is_dir(inode.clone()) {
         return Err("is a directory");
@@ -564,14 +561,13 @@ pub fn __truncate(inode:Arc<Inode>,mnt:Arc<VfsMount>,len:usize)->StrResult<()>{
     let old_size = inode.access_inner().file_size;
     inode.access_inner().file_size = len;
     let truncate = inode.inode_ops.truncate;
-    truncate(inode.clone()).map_err(|e|{
+    truncate(inode.clone()).map_err(|e| {
         inode.access_inner().file_size = old_size;
         e
     })?;
     ddebug!("__truncate end");
     Ok(())
 }
-
 
 #[inline(always)]
 pub fn is_dir(inode: Arc<Inode>) -> bool {

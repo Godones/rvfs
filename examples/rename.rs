@@ -1,6 +1,6 @@
 use rvfs::dentry::vfs_rename;
 use rvfs::file::{
-    vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, OpenFlags, FileMode,
+    vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, FileMode, OpenFlags,
 };
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 

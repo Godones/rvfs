@@ -1,5 +1,7 @@
+use rvfs::file::{
+    vfs_llseek, vfs_open_file, vfs_read_file, vfs_write_file, FileMode, OpenFlags, SeekFrom,
+};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
-use rvfs::file::{FileMode, OpenFlags, SeekFrom, vfs_llseek, vfs_open_file, vfs_read_file, vfs_write_file};
 
 fn main() {
     env_logger::init();
@@ -11,10 +13,12 @@ fn main() {
         "/file1",
         OpenFlags::O_CREAT | OpenFlags::O_RDWR,
         FileMode::FMODE_WRITE,
-    ).unwrap();
+    )
+    .unwrap();
 
     let offset = file1.access_inner().f_pos;
-    let write_len = vfs_write_file::<FakeFSC>(file1.clone(), b"hello world", offset as u64).unwrap();
+    let write_len =
+        vfs_write_file::<FakeFSC>(file1.clone(), b"hello world", offset as u64).unwrap();
     println!("write_len: {}", write_len);
     // when user call vfs_write_file, the file's f_pos will not be updated, so we need to update it manually
 

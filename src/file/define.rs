@@ -106,16 +106,16 @@ pub enum SeekFrom {
     Start(u64),
     End(u64),
     Current(i64),
-    Unknown
+    Unknown,
 }
 
-impl From<(usize,usize)> for SeekFrom{
+impl From<(usize, usize)> for SeekFrom {
     fn from(value: (usize, usize)) -> Self {
         match value {
-            (0,offset) => SeekFrom::Start(offset as u64),
-            (1,offset) => SeekFrom::Current(offset as i64),
-            (2,offset) => SeekFrom::End(offset as u64),
-            _ => SeekFrom::Unknown
+            (0, offset) => SeekFrom::Start(offset as u64),
+            (1, offset) => SeekFrom::Current(offset as i64),
+            (2, offset) => SeekFrom::End(offset as u64),
+            _ => SeekFrom::Unknown,
         }
     }
 }
@@ -145,7 +145,7 @@ pub struct FileOps {
     // 用户调用它来刷新待处理的数据。
     // 如果驱动程序没有实现这一方法，fsync系统调用将返回-EINVAL。
     pub fsync: fn(file: Arc<File>, datasync: bool) -> StrResult<()>,
-    pub release:fn(file:Arc<File>)->StrResult<()>,
+    pub release: fn(file: Arc<File>) -> StrResult<()>,
 }
 
 impl Debug for FileOps {
@@ -166,7 +166,7 @@ impl FileOps {
             open: |_| Err("Not support"),
             flush: |_| Ok(()),
             fsync: |_, _| Ok(()),
-            release: |_|Ok(())
+            release: |_| Ok(()),
         }
     }
 }

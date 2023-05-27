@@ -1,5 +1,5 @@
 use rvfs::dentry::vfs_rmdir;
-use rvfs::file::{vfs_mkdir, vfs_open_file, OpenFlags, FileMode};
+use rvfs::file::{vfs_mkdir, vfs_open_file, FileMode, OpenFlags};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
 fn main() {

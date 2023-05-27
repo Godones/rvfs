@@ -1,11 +1,14 @@
 mod define;
-use crate::dentry::{advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry, LookUpData, LookUpFlags, PathType, DirentType, Dirent64};
+use crate::dentry::{
+    advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry, Dirent64,
+    DirentType, LookUpData, LookUpFlags, PathType,
+};
 use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeMode};
 use crate::{ddebug, StrResult};
 use alloc::sync::Arc;
 pub use define::*;
-use log::{debug};
+use log::{debug, warn};
 
 /// 打开文件
 /// * name:文件名
@@ -25,7 +28,6 @@ pub fn vfs_open_file<T: ProcessFs>(
     let mut lookup_data = open_dentry::<T>(name, flags, mode)?;
     construct_file(&mut lookup_data, flags, mode)
 }
-
 
 fn construct_file(
     lookup_data: &LookUpData,
@@ -77,7 +79,6 @@ pub fn vfs_close_file<T: ProcessFs>(file: Arc<File>) -> StrResult<()> {
     Ok(())
 }
 
-
 /// read file
 ///
 /// we will update the file offset if the read operation is successful.
@@ -109,14 +110,13 @@ pub fn vfs_read_file<T: ProcessFs>(
     Err("read error")
 }
 
-
 /// write file
 ///
 /// This function will update the file size and offset if the write operation is successful.
 pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
     let write = file.f_ops.write;
     let mode = file.f_mode;
-    if !mode.contains(FileMode::FMODE_WRITE)&&!mode.contains(FileMode::FMODE_RDWR){
+    if !mode.contains(FileMode::FMODE_WRITE) && !mode.contains(FileMode::FMODE_RDWR) {
         return Err("file not open for writing");
     }
     // check whether file is valid
@@ -141,7 +141,7 @@ pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) ->
             file.access_inner().f_pos = offset as usize + len;
         }
         Ok(len)
-    }else {
+    } else {
         return Err("write file failed");
     }
 }
@@ -185,9 +185,7 @@ pub fn vfs_llseek(file: Arc<File>, whence: SeekFrom) -> StrResult<u64> {
     let llseek = file.f_ops.llseek;
     let res = llseek(file.clone(), whence);
     match res {
-        Err("Not support") =>{
-            return  __llseek(file, whence)
-        }
+        Err("Not support") => return __llseek(file, whence),
         Err(_) => {
             return Err("llseek error");
         }
@@ -197,15 +195,20 @@ pub fn vfs_llseek(file: Arc<File>, whence: SeekFrom) -> StrResult<u64> {
 }
 
 fn __llseek(file: Arc<File>, whence: SeekFrom) -> StrResult<u64> {
-    let f_size = file.f_dentry.access_inner().d_inode.access_inner().file_size;
+    let f_size = file
+        .f_dentry
+        .access_inner()
+        .d_inode
+        .access_inner()
+        .file_size;
     let mut inner = file.access_inner();
     match whence {
         SeekFrom::Start(off) => {
-            if (off as i64) < 0{
+            if (off as i64) < 0 {
                 return Err("invalid offset");
             }
             inner.f_pos = off as usize;
-        },
+        }
         SeekFrom::End(off) => {
             debug!("f_size: {}, off: {}", f_size, off);
             let new_pos = f_size as i64 + off as i64;
@@ -213,7 +216,7 @@ fn __llseek(file: Arc<File>, whence: SeekFrom) -> StrResult<u64> {
                 return Err("invalid offset");
             }
             inner.f_pos = new_pos as usize;
-        },
+        }
         SeekFrom::Current(off) => {
             let new_pos = inner.f_pos as i64 + off as i64;
             if new_pos < 0 {
@@ -222,7 +225,7 @@ fn __llseek(file: Arc<File>, whence: SeekFrom) -> StrResult<u64> {
             inner.f_pos = new_pos as usize;
         }
         _ => {
-            return Err( "invalid whence");
+            return Err("invalid whence");
         }
     }
     Ok(inner.f_pos as u64)
@@ -233,45 +236,38 @@ pub fn vfs_readdir(file: Arc<File>) -> StrResult<DirContext> {
     readdir(file)
 }
 
-
 /// the buf contains serveral dirents
-pub fn vfs_readdir1(file:Arc<File>,buf:&mut [u8]) -> StrResult<usize> {
+pub fn vfs_readdir1(file: Arc<File>, buf: &mut [u8]) -> StrResult<usize> {
     let readdir = file.f_ops.readdir;
     let res = readdir(file.clone())?;
     let mut count = 0;
+    let mut count_empty = 0;
     let buf_len = buf.len();
-    // if the buf len is zero,we return the size of all dirents
-    if buf_len == 0{
-        return Ok(res.len())
-    }
     let mut ptr = buf.as_mut_ptr();
-
-    res.enumerate().for_each(|(index, mut name)|{
+    res.enumerate().for_each(|(index, mut name)| {
         let ino = file.f_dentry.access_inner().d_inode.number;
         let type_ = DirentType::from(file.f_dentry.access_inner().d_inode.mode);
         let dirent = Dirent64::new(&name, ino as u64, index as i64, type_);
-
-        if dirent.len() + count > buf_len {
-            return;
+        count_empty += dirent.len();
+        if count + dirent.len() <= buf_len {
+            let dirent_ptr = unsafe { &mut *(ptr as *mut Dirent64) };
+            *dirent_ptr = dirent;
+            let name_ptr = dirent_ptr.name.as_mut_ptr();
+            unsafe {
+                name.push('\0');
+                let len = name.len();
+                name_ptr.copy_from(name.as_ptr(), len);
+                ptr = ptr.add(dirent_ptr.len());
+            }
+            count += dirent_ptr.len();
         }
-
-        let dirent_ptr = unsafe{
-            &mut *(ptr as *mut Dirent64)
-        };
-        *dirent_ptr = dirent;
-        let name_ptr = dirent_ptr.name.as_mut_ptr();
-        unsafe {
-            name.push('\0');
-            let len = name.len();
-            name_ptr.copy_from(name.as_ptr(),len);
-            ptr = ptr.add(dirent_ptr.len());
-        }
-        count += dirent_ptr.len();
-
     });
+    // if the buf len is zero,we return the size of all dirents
+    if buf_len == 0 {
+        return Ok(count_empty);
+    }
     Ok(count)
 }
-
 
 pub fn vfs_fsync(file: Arc<File>) -> StrResult<()> {
     // check file mode
@@ -282,8 +278,6 @@ pub fn vfs_fsync(file: Arc<File>) -> StrResult<()> {
     let fsync = file.f_ops.fsync;
     fsync(file, true)
 }
-
-
 
 impl From<OpenFlags> for LookUpFlags {
     fn from(val: OpenFlags) -> Self {
@@ -300,7 +294,6 @@ impl From<OpenFlags> for LookUpFlags {
         flags
     }
 }
-
 
 pub fn open_dentry<T: ProcessFs>(
     name: &str,
@@ -319,8 +312,8 @@ pub fn open_dentry<T: ProcessFs>(
     }
     // 查找文件所在父目录
     let mut lookup_data = path_walk::<T>(name, LookUpFlags::NOLAST)?;
-    if lookup_data.path_type == PathType::PATH_ROOT{
-        return Ok(lookup_data)
+    if lookup_data.path_type == PathType::PATH_ROOT {
+        return Ok(lookup_data);
     }
     // not dir
     if lookup_data.path_type != PathType::PATH_NORMAL {

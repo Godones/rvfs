@@ -1,4 +1,4 @@
-use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_readdir, vfs_write_file, OpenFlags, FileMode};
+use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_readdir, vfs_write_file, FileMode, OpenFlags};
 use rvfs::link::{vfs_link, vfs_readlink, vfs_symlink, vfs_unlink};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 
