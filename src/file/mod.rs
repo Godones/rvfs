@@ -239,10 +239,12 @@ pub fn vfs_readdir1(file:Arc<File>,buf:&mut [u8]) -> StrResult<usize> {
     let readdir = file.f_ops.readdir;
     let res = readdir(file.clone())?;
     let mut count = 0;
-
-    let mut ptr = buf.as_mut_ptr();
-
     let buf_len = buf.len();
+    // if the buf len is zero,we return the size of all dirents
+    if buf_len == 0{
+        Ok(res.len())
+    }
+    let mut ptr = buf.as_mut_ptr();
 
     res.enumerate().for_each(|(index, mut name)|{
         let ino = file.f_dentry.access_inner().d_inode.number;

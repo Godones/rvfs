@@ -146,7 +146,7 @@ pub struct Dirent64{
     /// reclen is the length of this linux_dirent
     pub reclen:u16,
     /// type is the file type
-    pub type_:u8,
+    pub type_:DirentType,
     /// name is the filename (null-terminated)
     pub name:[u8;0],
 }
@@ -175,7 +175,7 @@ impl Dirent64{
             ino,
             off,
             reclen:size as u16,
-            type_:type_.bits(),
+            type_,
             name:[0;0],
         }
     }
@@ -236,6 +236,9 @@ impl DirContext {
             count: 0,
             buf,
         }
+    }
+    pub fn len(&self) -> usize {
+        self.buf.len()
     }
 }
 
