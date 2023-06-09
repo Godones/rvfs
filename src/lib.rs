@@ -2,11 +2,11 @@
 #![feature(const_weak_new)]
 #![cfg_attr(not(test), no_std)]
 #![feature(error_in_core)]
+#![allow(clippy::len_without_is_empty)]
+#![allow(clippy::type_complexity, clippy::too_many_arguments)]
 //! virtual file system framework
 
-// use dentry::
 pub mod dentry;
-pub mod error;
 pub mod file;
 pub mod info;
 pub mod inode;
@@ -64,7 +64,7 @@ pub fn init_process_info(mnt: Arc<VfsMount>) {
     PROCESS_FS_CONTEXT.lock().cwd = mnt.root.clone();
     PROCESS_FS_CONTEXT.lock().root = mnt.root.clone();
     PROCESS_FS_CONTEXT.lock().cmnt = mnt.clone();
-    PROCESS_FS_CONTEXT.lock().rmnt = mnt.clone();
+    PROCESS_FS_CONTEXT.lock().rmnt = mnt;
 }
 
 pub struct ProcessFsContext {

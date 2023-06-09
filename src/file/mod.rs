@@ -1,14 +1,14 @@
 mod define;
 use crate::dentry::{
-    advance_link, advance_mount, find_file_indir, path_walk, DirContext, DirEntry, Dirent64,
-    DirentType, LookUpData, LookUpFlags, PathType,
+    advance_link, advance_mount, find_file_indir, path_walk, DirEntry, LookUpData, LookUpFlags,
+    PathType,
 };
 use crate::info::ProcessFs;
 use crate::inode::{Inode, InodeMode};
 use crate::{ddebug, StrResult};
 use alloc::sync::Arc;
 pub use define::*;
-use log::{debug, warn};
+use log::debug;
 
 /// 打开文件
 /// * name:文件名
@@ -25,8 +25,8 @@ pub fn vfs_open_file<T: ProcessFs>(
     if flags.contains(OpenFlags::O_TRUNC) {
         flags |= OpenFlags::O_RDWR;
     }
-    let mut lookup_data = open_dentry::<T>(name, flags, mode)?;
-    construct_file(&mut lookup_data, flags, mode)
+    let lookup_data = open_dentry::<T>(name, flags, mode)?;
+    construct_file(&lookup_data, flags, mode)
 }
 
 fn construct_file(
@@ -101,8 +101,7 @@ pub fn vfs_read_file<T: ProcessFs>(
     }
     let read = file.f_ops.read;
     let len = read(file.clone(), buf, offset);
-    if len.is_ok() {
-        let len = len.unwrap();
+    if let Ok(len) = len {
         // update inode offset
         file.access_inner().f_pos = offset as usize + len;
         return Ok(len);
@@ -130,8 +129,7 @@ pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) ->
     }
     let len = write(file.clone(), buf, offset);
     // update inode size and offset
-    if len.is_ok() {
-        let len = len.unwrap();
+    if let Ok(len) = len {
         let mut size = inode.access_inner().file_size;
         if offset as usize + len > size {
             size = offset as usize + len;
@@ -142,7 +140,7 @@ pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) ->
         }
         Ok(len)
     } else {
-        return Err("write file failed");
+        Err("write file failed")
     }
 }
 
@@ -218,7 +216,7 @@ fn __llseek(file: Arc<File>, whence: SeekFrom) -> StrResult<u64> {
             inner.f_pos = new_pos as usize;
         }
         SeekFrom::Current(off) => {
-            let new_pos = inner.f_pos as i64 + off as i64;
+            let new_pos = inner.f_pos as i64 + off;
             if new_pos < 0 {
                 return Err("invalid offset");
             }
@@ -231,42 +229,9 @@ fn __llseek(file: Arc<File>, whence: SeekFrom) -> StrResult<u64> {
     Ok(inner.f_pos as u64)
 }
 
-pub fn vfs_readdir(file: Arc<File>) -> StrResult<DirContext> {
+pub fn vfs_readdir(file: Arc<File>, dirents: &mut [u8]) -> StrResult<usize> {
     let readdir = file.f_ops.readdir;
-    readdir(file)
-}
-
-/// the buf contains serveral dirents
-pub fn vfs_readdir1(file: Arc<File>, buf: &mut [u8]) -> StrResult<usize> {
-    let readdir = file.f_ops.readdir;
-    let res = readdir(file.clone())?;
-    let mut count = 0;
-    let mut count_empty = 0;
-    let buf_len = buf.len();
-    let mut ptr = buf.as_mut_ptr();
-    res.enumerate().for_each(|(index, mut name)| {
-        let ino = file.f_dentry.access_inner().d_inode.number;
-        let type_ = DirentType::from(file.f_dentry.access_inner().d_inode.mode);
-        let dirent = Dirent64::new(&name, ino as u64, index as i64, type_);
-        count_empty += dirent.len();
-        if count + dirent.len() <= buf_len {
-            let dirent_ptr = unsafe { &mut *(ptr as *mut Dirent64) };
-            *dirent_ptr = dirent;
-            let name_ptr = dirent_ptr.name.as_mut_ptr();
-            unsafe {
-                name.push('\0');
-                let len = name.len();
-                name_ptr.copy_from(name.as_ptr(), len);
-                ptr = ptr.add(dirent_ptr.len());
-            }
-            count += dirent_ptr.len();
-        }
-    });
-    // if the buf len is zero,we return the size of all dirents
-    if buf_len == 0 {
-        return Ok(count_empty);
-    }
-    Ok(count)
+    readdir(file, dirents)
 }
 
 pub fn vfs_fsync(file: Arc<File>) -> StrResult<()> {

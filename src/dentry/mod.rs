@@ -460,7 +460,7 @@ pub fn vfs_rmdir<T: ProcessFs>(dir_name: &str) -> StrResult<()> {
     let name = dentry.access_inner().d_name.clone();
     parent.remove_child(name.as_str());
     // set inode with del flag
-    rmdir(parent_inode, dentry.clone())?;
+    rmdir(parent_inode, dentry)?;
     inode.access_inner().flags = InodeFlags::S_DEL;
     ddebug!("vfs_rmdir end");
     Ok(())
@@ -532,8 +532,8 @@ pub fn vfs_truncate<T: ProcessFs>(file_name: &str, len: usize) -> StrResult<()> 
     ddebug!("vfs_truncate");
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let inode = lookup_data.dentry.access_inner().d_inode.clone();
-    let mnt = lookup_data.mnt.clone();
-    __truncate(inode.clone(), mnt.clone(), len)?;
+    let mnt = lookup_data.mnt;
+    __truncate(inode, mnt, len)?;
     ddebug!("vfs_truncate end");
     Ok(())
 }
@@ -542,7 +542,7 @@ pub fn vfs_truncate_by_file(file: Arc<File>, len: usize) -> StrResult<()> {
     ddebug!("vfs_truncate_by_file");
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let mnt = file.f_mnt.clone();
-    __truncate(inode.clone(), mnt.clone(), len)?;
+    __truncate(inode, mnt, len)?;
     ddebug!("vfs_truncate_by_file end");
     Ok(())
 }

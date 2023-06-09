@@ -1,5 +1,6 @@
 use crate::dentry::DirEntry;
 use crate::file::File;
+use crate::info::VfsError;
 use crate::inode::Inode;
 use crate::mount::MountFlags;
 use crate::{StrResult, ALL_FS};
@@ -119,8 +120,8 @@ unsafe impl Sync for SuperBlock {}
 unsafe impl Send for SuperBlock {}
 
 pub trait Device: Debug + Sync + Send {
-    fn read(&self, buf: &mut [u8], offset: usize) -> Result<usize, ()>;
-    fn write(&self, buf: &[u8], offset: usize) -> Result<usize, ()>;
+    fn read(&self, buf: &mut [u8], offset: usize) -> Result<usize, VfsError>;
+    fn write(&self, buf: &[u8], offset: usize) -> Result<usize, VfsError>;
     fn size(&self) -> usize;
     fn flush(&self) {}
 }

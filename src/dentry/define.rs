@@ -150,6 +150,29 @@ pub struct Dirent64 {
     pub name: [u8; 0],
 }
 
+pub struct Dirent64Iterator<'a> {
+    pub buf: &'a [u8],
+    pub pos: usize,
+}
+
+impl<'a> Dirent64Iterator<'a> {
+    pub fn new(buf: &'a [u8]) -> Self {
+        Dirent64Iterator { buf, pos: 0 }
+    }
+}
+
+impl<'a> Iterator for Dirent64Iterator<'a> {
+    type Item = &'a Dirent64;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos >= self.buf.len() {
+            return None;
+        }
+        let dirent = unsafe { &*(self.buf.as_ptr().add(self.pos) as *const Dirent64) };
+        self.pos += dirent.len();
+        Some(dirent)
+    }
+}
+
 impl Debug for Dirent64 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         let name = self.name.as_ptr();

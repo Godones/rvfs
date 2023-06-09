@@ -87,7 +87,7 @@ impl VfsMount {
             inner: Mutex::new(VfsMountInner {
                 child: Vec::new(),
                 parent,
-                mount_point: dir.clone(),
+                mount_point: dir,
             }),
         };
         let mnt = Arc::new(vfs_mount);

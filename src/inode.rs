@@ -16,9 +16,9 @@ bitflags! {
         const S_INVALID = 0x4;
     }
     pub struct InodeMode:u32{
-        const S_SYMLINK = 0120000;
-        const S_DIR = 0040000;
-        const S_FILE = 0100000;
+        const S_SYMLINK = 0o120000;
+        const S_DIR = 0o040000;
+        const S_FILE = 0o100000;
     }
 }
 
@@ -100,7 +100,7 @@ impl Inode {
         blk_dev: Option<Arc<dyn Device>>,
         mode: InodeMode,
     ) -> Self {
-        let inode = Self {
+        Self {
             number,
             dev_desc,
             inode_ops,
@@ -118,8 +118,7 @@ impl Inode {
                 data: None,
                 special_data: None,
             }),
-        };
-        inode
+        }
     }
 
     pub fn is_valid(&self) -> bool {

@@ -1,9 +1,11 @@
 use crate::dentry::DirEntry;
 use crate::mount::VfsMount;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::sync::Arc;
 use core::error::Error;
 use core::fmt::{Display, Formatter};
+
+pub type Result<T> = core::result::Result<T, VfsError>;
 
 /// The information of the process's file system
 pub struct ProcessFsInfo {
@@ -80,31 +82,26 @@ pub enum VfsError {
     NotImpl,
     DiskFsError(String),
 }
-impl VfsError {
-    pub fn to_string(&self) -> String {
-        match self {
-            VfsError::DirNotFound => "Directory not found".to_string(),
-            VfsError::FileNotFound => "File not found".to_string(),
-            VfsError::FileAlreadyExist => "File already exist".to_string(),
-            VfsError::DirNotEmpty => "Directory not empty".to_string(),
-            VfsError::NotDir => "Not a directory".to_string(),
-            VfsError::DirAlreadyExist => "Directory already exist".to_string(),
-            VfsError::NotFile => "Not a file".to_string(),
-            VfsError::NotLink => "Not a link".to_string(),
-            VfsError::LinkNotFound => "Link not found".to_string(),
-            VfsError::LinkLoop => "Link loop".to_string(),
-            VfsError::LinkDepthTooDeep => "Link depth too deep".to_string(),
-            VfsError::LinkCountTooMany => "Link count too many".to_string(),
-            VfsError::InvalidPath => "Invalid path".to_string(),
-            VfsError::NotImpl => "Not implemented".to_string(),
-            VfsError::DiskFsError(msg) => "Disk fs error: ".to_string() + msg,
-        }
-    }
-}
 
 impl Display for VfsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.to_string())
+        match self {
+            VfsError::DirNotFound => write!(f, "Directory not found"),
+            VfsError::FileNotFound => write!(f, "File not found"),
+            VfsError::FileAlreadyExist => write!(f, "File already exist"),
+            VfsError::DirNotEmpty => write!(f, "Directory not empty"),
+            VfsError::NotDir => write!(f, "Not a directory"),
+            VfsError::DirAlreadyExist => write!(f, "Directory already exist"),
+            VfsError::NotFile => write!(f, "Not a file"),
+            VfsError::NotLink => write!(f, "Not a link"),
+            VfsError::LinkNotFound => write!(f, "Link not found"),
+            VfsError::LinkLoop => write!(f, "Link loop"),
+            VfsError::LinkDepthTooDeep => write!(f, "Link depth too deep"),
+            VfsError::LinkCountTooMany => write!(f, "Link count too many"),
+            VfsError::InvalidPath => write!(f, "Invalid path"),
+            VfsError::NotImpl => write!(f, "Not implemented"),
+            VfsError::DiskFsError(msg) => write!(f, "Disk fs error: {msg}",),
+        }
     }
 }
 

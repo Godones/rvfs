@@ -47,7 +47,7 @@ fn main() {
     let mut buf = [0u8; 10];
     vfs_write_file::<FakeFSC>(file.clone(), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].as_ref(), 0).unwrap();
     let _read = vfs_read_file::<FakeFSC>(file, buf.as_mut(), 0).unwrap();
-    println!("read: {:?}", buf);
+    println!("read: {buf:?}");
     println!("test read/write file ok ......");
 
     // 注册tmpfs，实际上也是一个内存文件系统，但这里的实现将其与rootfs分开了
@@ -60,7 +60,7 @@ fn main() {
     println!("test do_mount ok ......");
 
     println!("----------------------------------------");
-    println!("{:#?}", tmpfs);
+    println!("{tmpfs:#?}");
 
     println!("----------------------------------------");
     println!("mkdir /tmp/tt1, it should in tmpfs root dir");
@@ -84,7 +84,7 @@ fn main() {
     println!("-----------------------------------------");
     vfs_unlink::<FakeFSC>("/f2").unwrap();
     let f2_lookup = path_walk::<FakeFSC>("/f2", LookUpFlags::READ_LINK);
-    assert_eq!(f2_lookup.is_err(), true);
+    assert!(f2_lookup.is_err());
     let f1_lookup = path_walk::<FakeFSC>("/f1", LookUpFlags::READ_LINK).unwrap();
     assert_eq!(
         f1_lookup
@@ -97,20 +97,20 @@ fn main() {
     );
 
     let file_attr = vfs_getattr::<FakeFSC>("/f1", StatFlags::empty()).unwrap();
-    println!("file_attr: {:#?}", file_attr);
+    println!("file_attr: {file_attr:#?}");
 
     let dir_attr = vfs_getattr::<FakeFSC>("/", StatFlags::empty()).unwrap();
-    println!("dir_attr: {:#?}", dir_attr);
+    println!("dir_attr: {dir_attr:#?}");
 
     println!("-----------------------------------------");
     vfs_symlink::<FakeFSC>("/", "/s1").unwrap();
     println!("vfs_symlink ok ......");
 
     let file_attr = vfs_getattr::<FakeFSC>("/s1", StatFlags::empty()).unwrap();
-    println!("file_attr: {:#?}", file_attr);
+    println!("file_attr: {file_attr:#?}");
 
     vfs_symlink::<FakeFSC>("/tmp/tt1", "/s2").unwrap();
     println!("vfs_symlink ok ......");
     let file_attr = vfs_getattr::<FakeFSC>("/s2", StatFlags::empty()).unwrap();
-    println!("file_attr: {:#?}", file_attr);
+    println!("file_attr: {file_attr:#?}");
 }

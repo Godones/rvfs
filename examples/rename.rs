@@ -1,8 +1,9 @@
-use rvfs::dentry::vfs_rename;
+use rvfs::dentry::{vfs_rename, Dirent64Iterator};
 use rvfs::file::{
-    vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, FileMode, OpenFlags,
+    vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, File, FileMode, OpenFlags,
 };
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
+use std::sync::Arc;
 
 fn main() {
     env_logger::init();
@@ -21,30 +22,21 @@ fn main() {
         FileMode::FMODE_WRITE | FileMode::FMODE_READ,
     )
     .unwrap();
-    println!("file1: {:#?}", file1);
-    println!("file2: {:#?}", file2);
-    vfs_write_file::<FakeFSC>(file1.clone(), b"hello", 0).unwrap();
+    println!("file1: {file1:#?}");
+    println!("file2: {file2:#?}");
+    vfs_write_file::<FakeFSC>(file1, b"hello", 0).unwrap();
     vfs_write_file::<FakeFSC>(file2.clone(), b"world", 0).unwrap();
 
     println!("--------------------rename /file1 to /file3----------------------");
     vfs_rename::<FakeFSC>("/file1", "/file3").unwrap();
     let root = vfs_open_file::<FakeFSC>("/", OpenFlags::O_RDONLY, FileMode::FMODE_READ).unwrap();
     // println!("root: {:#?}", root);
-    vfs_readdir(root.clone())
-        .unwrap()
-        .into_iter()
-        .for_each(|name| {
-            println!("name: {}", name);
-        });
+
+    readdir(root.clone());
     println!("--------------------rename /file2 to /file3----------------------");
     vfs_rename::<FakeFSC>("/file2", "/file3").unwrap();
-    vfs_readdir(root.clone())
-        .unwrap()
-        .into_iter()
-        .for_each(|name| {
-            println!("name: {}", name);
-        });
-    println!("file2: {:#?}", file2);
+    readdir(root.clone());
+    println!("file2: {file2:#?}");
 
     let mut buf = [0u8; 5];
     vfs_read_file::<FakeFSC>(file2, &mut buf, 0).unwrap();
@@ -60,13 +52,21 @@ fn main() {
     println!("--------------------rename /tmp to /tmptmp----------------------");
     vfs_rename::<FakeFSC>("/tmp", "/tmptmp").unwrap();
 
-    vfs_readdir(root).unwrap().into_iter().for_each(|name| {
-        println!("name: {}", name);
-    });
+    readdir(root);
     // println!("file3: {:#?}", file3);
     let tmp =
         vfs_open_file::<FakeFSC>("/tmptmp", OpenFlags::O_RDONLY, FileMode::FMODE_READ).unwrap();
-    vfs_readdir(tmp).unwrap().into_iter().for_each(|name| {
-        println!("name: {}", name);
+    readdir(tmp);
+}
+
+fn readdir(dir: Arc<File>) {
+    let len = vfs_readdir(dir.clone(), &mut [0; 0]).unwrap();
+    assert!(len > 0);
+    let mut dirents = vec![0u8; len];
+
+    let r = vfs_readdir(dir, &mut dirents[..]).unwrap();
+    assert_eq!(r, len);
+    Dirent64Iterator::new(&dirents[..]).for_each(|x| {
+        println!("{} {:?} {}",x.get_name(),x.type_,x.ino);
     });
 }

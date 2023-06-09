@@ -1,4 +1,5 @@
-use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_readdir, FileMode, OpenFlags};
+use rvfs::dentry::Dirent64Iterator;
+use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_readdir, File, FileMode, OpenFlags};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC, PROCESS_FS_CONTEXT};
 use std::sync::Arc;
 
@@ -21,7 +22,6 @@ fn main() {
         FileMode::FMODE_WRITE,
     )
     .unwrap();
-
     let a_txt = vfs_open_file::<FakeFSC>(
         "./a.txt",
         OpenFlags::O_RDWR | OpenFlags::O_CREAT,
@@ -30,9 +30,7 @@ fn main() {
     .unwrap();
 
     let root = vfs_open_file::<FakeFSC>("/", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
-    vfs_readdir(root).unwrap().for_each(|x| {
-        println!("name: {}", x);
-    });
+    readdir(root);
     // we set the cwd to /tmp
     PROCESS_FS_CONTEXT.lock().cwd = tmp.f_dentry.clone();
     let file = vfs_open_file::<FakeFSC>(
@@ -41,16 +39,13 @@ fn main() {
         FileMode::FMODE_WRITE,
     )
     .unwrap();
-    println!("file:{:#?}", file);
+    println!("file:{file:#?}");
 
     // f1 and f2
-    vfs_readdir(tmp).unwrap().for_each(|x| {
-        println!("name: {}", x);
-    });
+    readdir(tmp);
 
     let file_ = vfs_open_file::<FakeFSC>("./f2", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
     assert!(Arc::ptr_eq(&file, &file_));
-    println!("------------------");
     let a_txt_ =
         vfs_open_file::<FakeFSC>("../a.txt", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
     assert!(Arc::ptr_eq(&a_txt, &a_txt_));
@@ -63,4 +58,16 @@ fn main() {
     let a_txt__ =
         vfs_open_file::<FakeFSC>("../../a.txt", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
     assert!(Arc::ptr_eq(&a_txt, &a_txt__));
+}
+
+fn readdir(dir: Arc<File>) {
+    let len = vfs_readdir(dir.clone(), &mut [0; 0]).unwrap();
+    assert!(len > 0);
+    let mut dirents = vec![0u8; len];
+
+    let r = vfs_readdir(dir, &mut dirents[..]).unwrap();
+    assert_eq!(r, len);
+    Dirent64Iterator::new(&dirents[..]).for_each(|x| {
+        println!("{} {:?} {}",x.get_name(),x.type_,x.ino);
+    });
 }

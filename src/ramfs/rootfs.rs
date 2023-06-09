@@ -3,14 +3,14 @@ use super::{
     ramfs_kill_super_blk, ramfs_link, ramfs_mkdir, ramfs_read_file, ramfs_read_link,
     ramfs_simple_super_blk, ramfs_symlink, ramfs_unlink, ramfs_write_file, RamFsInode,
 };
-use crate::dentry::{DirContext, DirEntry, LookUpData};
+use crate::dentry::{DirEntry, Dirent64, DirentType, LookUpData};
 use crate::file::{File, FileMode, FileOps};
 use crate::inode::{Inode, InodeFlags, InodeMode, InodeOps};
 use crate::mount::MountFlags;
 use crate::superblock::{DataOps, FileSystemAttr, FileSystemType, FileSystemTypeInner, SuperBlock};
 use crate::{ddebug, StrResult};
 use alloc::boxed::Box;
-use alloc::string::{String, ToString};
+use alloc::string::{ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cmp::min;
@@ -234,20 +234,45 @@ fn rootfs_follow_link(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> St
 }
 
 /// read the contents of a directory
-fn rootfs_readdir(file: Arc<File>) -> StrResult<DirContext> {
+fn rootfs_readdir(file: Arc<File>, dirents: &mut [u8]) -> StrResult<usize> {
     ddebug!("rootfs_readdir");
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let number = inode.number;
     let bind = ROOT_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
-    let mut data = Vec::new();
-    ram_inode.dentries.keys().for_each(|x| {
-        data.extend_from_slice(x.as_bytes());
-        data.push(0);
-    });
-    let dir_context = DirContext::new(data);
+    let mut count = 0;
+    let mut count_empty = 0;
+    let buf_len = dirents.len();
+    let mut ptr = dirents.as_mut_ptr();
+    ram_inode
+        .dentries
+        .iter()
+        .enumerate()
+        .for_each(|(index, (name, &number))| {
+            let sub_inode = bind.get(&number).unwrap();
+            let type_ = DirentType::from(sub_inode.mode);
+            let dirent = Dirent64::new(name, number as u64, index as i64, type_);
+            count_empty += dirent.len();
+            if count + dirent.len() <= buf_len {
+                let dirent_ptr = unsafe { &mut *(ptr as *mut Dirent64) };
+                *dirent_ptr = dirent;
+                let name_ptr = dirent_ptr.name.as_mut_ptr();
+                unsafe {
+                    let mut name = name.clone();
+                    name.push('\0');
+                    let len = name.len();
+                    name_ptr.copy_from(name.as_ptr(), len);
+                    ptr = ptr.add(dirent_ptr.len());
+                }
+                count += dirent_ptr.len();
+            }
+        });
+    // if the buf len is zero,we return the size of all dirents
+    if buf_len == 0 {
+        return Ok(count_empty);
+    }
     ddebug!("rootfs_readdir end");
-    Ok(dir_context)
+    Ok(count)
 }
 
 fn rootfs_rmdir(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
@@ -282,9 +307,13 @@ fn rootfs_get_attr(dentry: Arc<DirEntry>, key: &str, val: &mut [u8]) -> StrResul
     }
     let ex_attr = ex_attr.unwrap();
     let len = ex_attr.as_slice().len();
+
+    if val.is_empty() {
+        return Ok(len);
+    }
     let min_len = min(len, val.len());
     val[..min_len].copy_from_slice(&ex_attr.as_slice()[..min_len]);
-    Ok(ex_attr.as_slice().len())
+    Ok(min_len)
 }
 fn rootfs_set_attr(dentry: Arc<DirEntry>, key: &str, val: &[u8]) -> StrResult<()> {
     let inode = dentry.access_inner().d_inode.clone();
@@ -310,15 +339,26 @@ fn rootfs_list_attr(dentry: Arc<DirEntry>, buf: &mut [u8]) -> StrResult<usize> {
     let number = inode.number;
     let bind = ROOT_FS.lock();
     let ram_inode = bind.get(&number).unwrap();
-    let mut attr_list = String::new();
-    for (key, _) in ram_inode.ex_attr.iter() {
-        attr_list.push_str(key);
-        attr_list.push(0 as char);
+
+    if buf.is_empty() {
+        let keys_len: usize = ram_inode
+            .ex_attr
+            .iter()
+            .map(|(name, _)| name.len() + 1)
+            .sum();
+        return Ok(keys_len);
     }
-    let len = attr_list.as_bytes().len();
-    let min_len = min(len, buf.len());
-    buf[..min_len].copy_from_slice(&attr_list.as_bytes()[..min_len]);
-    Ok(len)
+    let mut offset = 0;
+    for (key, _) in ram_inode.ex_attr.iter() {
+        let len = key.len() + 1;
+        if offset + len > buf.len() {
+            break;
+        }
+        buf[offset..offset + len - 1].copy_from_slice(key.as_bytes());
+        buf[offset + len - 1] = 0;
+        offset += len;
+    }
+    Ok(offset)
 }
 
 fn rootfs_truncate(inode: Arc<Inode>) -> StrResult<()> {

@@ -7,5 +7,5 @@ fn main() {
     let rootfs = mount_rootfs();
     init_process_info(rootfs);
     let file = vfs_open_file::<FakeFSC>("/", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
-    println!("file: {:#?}", file);
+    println!("file: {file:#?}");
 }

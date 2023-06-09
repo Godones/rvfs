@@ -11,6 +11,6 @@ fn main() {
         FileMode::FMODE_RDWR,
     )
     .unwrap();
-    println!("file: {:#?}", file);
+    println!("file: {file:#?}");
     vfs_close_file::<FakeFSC>(file).unwrap();
 }

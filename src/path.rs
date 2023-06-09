@@ -25,7 +25,7 @@ pub fn vfs_lookup_path(
             if inner.d_name == "/" {
                 // if we meet the mount point,we should recede it
                 let mount_root = &mnt.root;
-                assert!(Arc::ptr_eq(&mount_root, &current));
+                assert!(Arc::ptr_eq(mount_root, &current));
                 let mnt_point = mnt.access_inner().mount_point.clone();
                 if !Arc::ptr_eq(&mnt_point, &current) {
                     let p_mnt = mnt.access_inner().parent.upgrade().unwrap();
@@ -82,25 +82,21 @@ pub fn vfs_lookup_path(
 /// * /bin/mytool/ + t1 == /bin/mytool/t1
 /// * /bin/mytool/ + ../../t1 == /bin/mytool/../../t1 == /t1
 fn stitching_path(f_path: String, s_path: String) -> Option<String> {
-    if s_path.starts_with("./") {
-        stitching_path(f_path, s_path[2..].to_string())
-    } else if s_path.starts_with("../") {
+    if let Some(stripped) = s_path.strip_prefix("./") {
+        stitching_path(f_path, stripped.to_string())
+    } else if let Some(stripped) = s_path.strip_prefix("../") {
         // find the index of the last / in f_path
-        let index = f_path.rfind("/");
-        if index.is_none() {
-            return None;
-        }
+        let index = f_path.rfind('/');
+        index?;
         // index ==0 means the root,so we think it is error
         let index = index.unwrap();
         // find the second last /
-        let index = f_path[..index].rfind("/");
-        if index.is_none() {
-            return None;
-        }
+        let index = f_path[..index].rfind('/');
+        index?;
         let index = index.unwrap();
         // we get the new path
         let new_path = f_path[..=index].to_string();
-        stitching_path(new_path, s_path[3..].to_string())
+        stitching_path(new_path, stripped.to_string())
     } else {
         return if s_path.eq(".") {
             // we think it is error
@@ -122,23 +118,17 @@ pub enum ParsePathType {
 impl ParsePathType {
     pub fn from<T: ToString>(value: T) -> Self {
         let path = value.to_string();
-        if path.starts_with("/") {
+        if path.starts_with('/') {
             ParsePathType::Absolute(path)
         } else {
             ParsePathType::Relative(path)
         }
     }
     pub fn is_relative(&self) -> bool {
-        match self {
-            ParsePathType::Relative(_) => true,
-            _ => false,
-        }
+        matches!(self, ParsePathType::Relative(_))
     }
     pub fn is_absolute(&self) -> bool {
-        match self {
-            ParsePathType::Absolute(_) => true,
-            _ => false,
-        }
+        matches!(self, ParsePathType::Absolute(_))
     }
     pub fn path(&self) -> String {
         match self {
