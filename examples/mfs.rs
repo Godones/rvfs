@@ -2,7 +2,7 @@ use rvfs::dentry::{path_walk, LookUpFlags};
 use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_read_file, vfs_write_file, FileMode, OpenFlags};
 use rvfs::link::{vfs_link, vfs_symlink, vfs_unlink};
 use rvfs::mount::{do_mount, MountFlags};
-use rvfs::ramfs::tmpfs::tmp_fs_type;
+use rvfs::ramfs::tmpfs::{TMP_FS_TYPE};
 use rvfs::stat::{vfs_getattr, StatFlags};
 use rvfs::superblock::register_filesystem;
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
@@ -52,7 +52,7 @@ fn main() {
 
     // 注册tmpfs，实际上也是一个内存文件系统，但这里的实现将其与rootfs分开了
     println!("----------------------------------------");
-    register_filesystem(tmp_fs_type()).unwrap();
+    register_filesystem(TMP_FS_TYPE).unwrap();
     println!("register tmpfs ok ......");
     println!("test do_mount");
     let tmpfs = do_mount::<FakeFSC>("", "/tmp", "tmpfs", MountFlags::MNT_NO_DEV, None).unwrap();

@@ -2,7 +2,7 @@ use rvfs::dentry::{Dirent64Iterator, LookUpFlags};
 use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_readdir, File, FileMode, OpenFlags};
 use rvfs::mount::{do_mount, MountFlags};
 use rvfs::path::{vfs_lookup_path, ParsePathType};
-use rvfs::ramfs::tmpfs::tmp_fs_type;
+use rvfs::ramfs::tmpfs::TMP_FS_TYPE;
 use rvfs::stat::KStat;
 use rvfs::superblock::register_filesystem;
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
@@ -19,7 +19,7 @@ fn main() {
 
     readdir(file);
 
-    register_filesystem(tmp_fs_type()).unwrap();
+    register_filesystem(TMP_FS_TYPE).unwrap();
     println!("register tmpfs ok ......");
     println!("test do_mount");
     let tmpfs =

@@ -27,7 +27,9 @@ lazy_static! {
         Arc::new(Mutex::new(HashMap::new()));
 }
 
-pub const fn root_fs_type() -> FileSystemType {
+pub const  ROOTFS_TYPE:FileSystemType = root_fs_type();
+
+ const fn root_fs_type() -> FileSystemType {
     FileSystemType {
         name: "rootfs",
         fs_flags: FileSystemAttr::empty(),
@@ -123,8 +125,6 @@ fn rootfs_get_super_blk(
     // 创建目录项
     let dentry = ramfs_create_root_dentry(None, inode)?;
     sb_blk.update_root(dentry);
-    // 将sb_blk插入到fs_type的链表中
-    fs_type.insert_super_blk(sb_blk.clone());
     ddebug!("rootfs_get_super_blk end");
     Ok(sb_blk)
 }

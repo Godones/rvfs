@@ -24,22 +24,21 @@ use spin::Mutex;
 
 static INODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+pub const TMP_FS_TYPE: FileSystemType = FileSystemType {
+    name: "tmpfs",
+    fs_flags: FileSystemAttr::empty(),
+    get_super_blk: tmpfs_get_super_blk,
+    kill_super_blk: ramfs_kill_super_blk,
+    inner: Mutex::new(FileSystemTypeInner {
+        super_blk_s: Vec::new(),
+    }),
+};
+
 lazy_static! {
     static ref TMP_FS: Arc<Mutex<HashMap<usize, RamFsInode>>> =
         Arc::new(Mutex::new(HashMap::new()));
 }
 
-pub const fn tmp_fs_type() -> FileSystemType {
-    FileSystemType {
-        name: "tmpfs",
-        fs_flags: FileSystemAttr::empty(),
-        get_super_blk: tmpfs_get_super_blk,
-        kill_super_blk: ramfs_kill_super_blk,
-        inner: Mutex::new(FileSystemTypeInner {
-            super_blk_s: Vec::new(),
-        }),
-    }
-}
 
 const TMPFS_DIR_INODE_OPS: InodeOps = {
     let mut ops = InodeOps::empty();
@@ -119,8 +118,6 @@ fn tmpfs_get_super_blk(
     // 创建目录项
     let dentry = ramfs_create_root_dentry(None, inode)?;
     sb_blk.update_root(dentry);
-    // 将sb_blk插入到fs_type的链表中
-    fs_type.insert_super_blk(sb_blk.clone());
     ddebug!("tmpfs_get_super_blk end");
     Ok(sb_blk)
 }

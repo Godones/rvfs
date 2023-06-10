@@ -5,7 +5,7 @@ use alloc::sync::Arc;
 use core::error::Error;
 use core::fmt::{Display, Formatter};
 
-pub type Result<T> = core::result::Result<T, VfsError>;
+pub type VfsResult<T> = Result<T, VfsError>;
 
 /// The information of the process's file system
 pub struct ProcessFsInfo {
@@ -80,7 +80,10 @@ pub enum VfsError {
     LinkCountTooMany,
     InvalidPath,
     NotImpl,
+    FsTypeNotFound,
+    MountInternal,
     DiskFsError(String),
+    Other(String),
 }
 
 impl Display for VfsError {
@@ -101,6 +104,9 @@ impl Display for VfsError {
             VfsError::InvalidPath => write!(f, "Invalid path"),
             VfsError::NotImpl => write!(f, "Not implemented"),
             VfsError::DiskFsError(msg) => write!(f, "Disk fs error: {msg}",),
+            VfsError::FsTypeNotFound => write!(f, "File system type not found"),
+            VfsError::MountInternal => write!(f, "Mount internal error"),
+            VfsError::Other(msg) => write!(f, "Other error: {msg}",),
         }
     }
 }

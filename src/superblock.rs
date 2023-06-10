@@ -242,6 +242,10 @@ impl FileSystemType {
     pub fn insert_super_blk(&self, super_blk: Arc<SuperBlock>) {
         self.access_inner().super_blk_s.push(super_blk);
     }
+    pub fn find_super_blk(&self, dev_name: &str) -> Option<Arc<SuperBlock>> {
+        let lock = self.access_inner();
+        lock.super_blk_s.iter().find(|sb| sb.blk_dev_name == dev_name).cloned()
+    }
 }
 
 bitflags! {

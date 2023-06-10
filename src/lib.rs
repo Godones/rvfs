@@ -27,8 +27,8 @@ use alloc::vec::Vec;
 use info::{ProcessFs, ProcessFsInfo, VfsTime};
 use lazy_static::lazy_static;
 pub use log::{debug, info, warn};
-use ramfs::rootfs::root_fs_type;
 use spin::{Mutex, RwLock};
+use crate::ramfs::rootfs::ROOTFS_TYPE;
 
 pub type StrResult<T> = Result<T, &'static str>;
 
@@ -43,12 +43,12 @@ lazy_static! {
 pub fn mount_rootfs() -> Arc<VfsMount> {
     // 注册内存文件系统
     ddebug!("init_vfs");
-    register_filesystem(root_fs_type()).unwrap();
+    register_filesystem(ROOTFS_TYPE).unwrap();
     // 生成内存文件系统的超级块
     let mnt = do_kernel_mount(
         "rootfs",
         MountFlags::MNT_NO_DEV,
-        "",
+        "root",
         MountFlags::MNT_NO_DEV,
         None,
     )

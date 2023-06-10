@@ -1,5 +1,5 @@
 use crate::dentry::{path_walk, DirEntry, LookUpData, LookUpFlags};
-use crate::info::ProcessFs;
+use crate::info::{ProcessFs, VfsError, VfsResult};
 use crate::inode::{InodeFlags, InodeMode};
 use crate::superblock::{lookup_filesystem, DataOps, SuperBlock};
 use crate::{ddebug, StrResult, GLOBAL_HASH_MOUNT};
@@ -9,7 +9,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
-use log::debug;
+use log::{debug, warn};
 use spin::{Mutex, MutexGuard};
 
 bitflags! {
@@ -153,7 +153,7 @@ pub fn do_mount<T: ProcessFs>(
     let lookup_data = ret.unwrap();
     let ret = do_add_mount(&lookup_data, fs_type, flags, mnt_flags, dev_name, data);
     ddebug!("do_mount end");
-    ret
+    ret.map_err(|_| "do_add_mount error")
 }
 
 fn do_add_mount(
@@ -163,10 +163,10 @@ fn do_add_mount(
     mnt_flags: MountFlags,
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
-) -> StrResult<Arc<VfsMount>> {
+) -> VfsResult<Arc<VfsMount>> {
     ddebug!("do_add_mount");
     if fs_type.is_empty() {
-        return Err("fs_type is empty");
+        return Err(VfsError::FsTypeNotFound)
     }
     // 加载文件系统超级块
     let mount = do_kernel_mount(fs_type, flags, dev_name, mnt_flags, data)?;
@@ -177,11 +177,11 @@ fn do_add_mount(
         .mount_flag
         .contains(MountFlags::MNT_INTERNAL)
     {
-        return Err("fs_internal");
+        return Err(VfsError::MountInternal)
     }
     // 挂载系统目录
     debug!("**do_add_mount: mount.lock().flag = mnt_flags ok");
-    check_and_graft_tree(mount, look)
+    check_and_graft_tree(mount, look).map_err(|err|VfsError::Other(err.to_string()))
 }
 
 /// 生成一个挂载点
@@ -191,18 +191,29 @@ pub fn do_kernel_mount(
     dev_name: &str,
     mnt_flags: MountFlags,
     data: Option<Box<dyn DataOps>>,
-) -> Result<Arc<VfsMount>, &'static str> {
+) -> VfsResult<Arc<VfsMount>> {
     ddebug!("do_kernel_mount");
     let fs_type = lookup_filesystem(fs_type);
     // 错误的文件系统类型
     if fs_type.is_none() {
-        return Err("No fstype");
+        return Err(VfsError::FsTypeNotFound)
     }
     let fs_type = fs_type.unwrap();
     // 从设备读取文件系统超级块数据
-    let get_sb_func = fs_type.get_super_blk;
+    // find the same super block according to dev_name
+    let super_blk = fs_type.find_super_blk(dev_name);
 
-    let super_blk = (get_sb_func)(fs_type, flags, dev_name, data)?;
+    warn!("super_blk = {:#x?}", super_blk);
+
+    let super_blk  = if super_blk.is_none(){
+        let get_sb_func = fs_type.get_super_blk;
+        let super_blk = (get_sb_func)(fs_type.clone(), flags, dev_name, data).map_err(|err|VfsError::DiskFsError(err.to_string()))?;
+        // 将sb_blk插入到fs_type的链表中
+        fs_type.insert_super_blk(super_blk.clone());
+        super_blk
+    }else {
+        super_blk.unwrap()
+    };
 
     // 分配挂载点描述符
     let mount = VfsMount::new(dev_name, super_blk, Weak::new(), mnt_flags);
@@ -212,7 +223,6 @@ pub fn do_kernel_mount(
 /// 挂载到系统目录中
 fn check_and_graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<Arc<VfsMount>> {
     ddebug!("check_and_graft_tree");
-    let mut global_mount_lock = GLOBAL_HASH_MOUNT.write();
     // 如果文件系统已经被安装在指定的安装点上，
     // let mnt = look.mnt.lock();
     // let root_eq = Arc::ptr_eq(&mnt.root, &look.dentry);
@@ -222,7 +232,6 @@ fn check_and_graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResul
     // if eq && root_eq {
     //     return Err("fs exist");
     // }
-
     // 或者该安装点是一个符号链接，则释放读写信号量并返回错误
     if new_mount
         .root
@@ -234,6 +243,7 @@ fn check_and_graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResul
         return Err("mnt is symlink");
     }
     graft_tree(new_mount.clone(), look)?;
+    let mut global_mount_lock = GLOBAL_HASH_MOUNT.write();
     global_mount_lock.push(new_mount.clone());
     ddebug!("check_and_graft_tree end");
     Ok(new_mount)
@@ -271,11 +281,7 @@ fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
      * 2、如果目录还在缓存哈希表中，说明它是有效的，可mount
      * 否则不能mount
      */
-    drop(inode);
-    drop(dentry);
-    // let in_cache = look.dentry.d_flags.contains(DirFlags::IN_HASH);
-    //
-    // debug!("**graft_tree: check in_cache ok");
+
 
     // TODO 修改判断挂载点可用的条件
     // let c = look.dentry.clone();
