@@ -203,7 +203,7 @@ pub fn do_kernel_mount(
     // find the same super block according to dev_name
     let super_blk = fs_type.find_super_blk(dev_name);
 
-    warn!("super_blk = {:#x?}", super_blk);
+    // warn!("super_blk = {:#x?}", super_blk);
 
     let super_blk = if super_blk.is_none() {
         let get_sb_func = fs_type.get_super_blk;
