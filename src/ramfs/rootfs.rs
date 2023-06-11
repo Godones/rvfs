@@ -10,7 +10,7 @@ use crate::mount::MountFlags;
 use crate::superblock::{DataOps, FileSystemAttr, FileSystemType, FileSystemTypeInner, SuperBlock};
 use crate::{ddebug, StrResult};
 use alloc::boxed::Box;
-use alloc::string::{ToString};
+use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cmp::min;
@@ -27,9 +27,9 @@ lazy_static! {
         Arc::new(Mutex::new(HashMap::new()));
 }
 
-pub const  ROOTFS_TYPE:FileSystemType = root_fs_type();
+pub const ROOTFS_TYPE: FileSystemType = root_fs_type();
 
- const fn root_fs_type() -> FileSystemType {
+const fn root_fs_type() -> FileSystemType {
     FileSystemType {
         name: "rootfs",
         fs_flags: FileSystemAttr::empty(),
@@ -43,6 +43,7 @@ pub const  ROOTFS_TYPE:FileSystemType = root_fs_type();
 
 const ROOTFS_DIR_INODE_OPS: InodeOps = {
     let mut ops = InodeOps::empty();
+    // ops.lookup = rootfs_lookup;
     ops.mkdir = rootfs_mkdir;
     ops.create = rootfs_create;
     ops.link = rootfs_link;

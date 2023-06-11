@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::fmt::{Debug, Formatter};
 use core::ptr::null;
+use downcast::Any;
 use spin::{Mutex, MutexGuard};
 
 pub type DevDesc = u32;
@@ -125,12 +126,14 @@ pub trait Device: Debug + Sync + Send {
     fn size(&self) -> usize;
     fn flush(&self) {}
 }
-pub trait DataOps: Debug {
+pub trait DataOps: Debug + Any {
     fn device(&self, name: &str) -> Option<Arc<dyn Device>>;
     fn data(&self) -> *const u8 {
         null()
     }
 }
+
+downcast!(dyn DataOps);
 
 pub struct SuperBlockOps {
     pub alloc_inode: fn(super_blk: Arc<SuperBlock>) -> StrResult<Arc<Inode>>,
@@ -244,7 +247,10 @@ impl FileSystemType {
     }
     pub fn find_super_blk(&self, dev_name: &str) -> Option<Arc<SuperBlock>> {
         let lock = self.access_inner();
-        lock.super_blk_s.iter().find(|sb| sb.blk_dev_name == dev_name).cloned()
+        lock.super_blk_s
+            .iter()
+            .find(|sb| sb.blk_dev_name == dev_name)
+            .cloned()
     }
 }
 

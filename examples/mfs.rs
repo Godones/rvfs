@@ -2,7 +2,7 @@ use rvfs::dentry::{path_walk, LookUpFlags};
 use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_read_file, vfs_write_file, FileMode, OpenFlags};
 use rvfs::link::{vfs_link, vfs_symlink, vfs_unlink};
 use rvfs::mount::{do_mount, MountFlags};
-use rvfs::ramfs::tmpfs::{TMP_FS_TYPE};
+use rvfs::ramfs::tmpfs::TMP_FS_TYPE;
 use rvfs::stat::{vfs_getattr, StatFlags};
 use rvfs::superblock::register_filesystem;
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};

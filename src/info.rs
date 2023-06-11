@@ -7,6 +7,8 @@ use core::fmt::{Display, Formatter};
 
 pub type VfsResult<T> = Result<T, VfsError>;
 
+pub const MAGIC_BASE: usize = 0x761203;
+
 /// The information of the process's file system
 pub struct ProcessFsInfo {
     pub root_mount: Arc<VfsMount>,
@@ -109,6 +111,12 @@ impl Display for VfsError {
             VfsError::Other(msg) => write!(f, "Other error: {msg}",),
         }
     }
+}
+
+#[derive(Default, Debug)]
+pub struct VfsTimeSpec {
+    pub tv_sec: u64,
+    pub tv_nsec: u64,
 }
 
 impl Error for VfsError {}

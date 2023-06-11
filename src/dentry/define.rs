@@ -234,6 +234,11 @@ impl From<InodeMode> for DirentType {
             InodeMode::S_SYMLINK => DirentType::DT_LNK,
             InodeMode::S_DIR => DirentType::DT_DIR,
             InodeMode::S_FILE => DirentType::DT_REG,
+            InodeMode::S_CHARDEV => DirentType::DT_CHR,
+            InodeMode::S_BLKDEV => DirentType::DT_BLK,
+            InodeMode::S_FIFO => DirentType::DT_FIFO,
+            InodeMode::S_SOCK => DirentType::DT_SOCK,
+            // InodeMode:: => DirentType::DT_WHT,
             _ => DirentType::DT_UNKNOWN,
         }
     }

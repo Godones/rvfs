@@ -39,7 +39,6 @@ lazy_static! {
         Arc::new(Mutex::new(HashMap::new()));
 }
 
-
 const TMPFS_DIR_INODE_OPS: InodeOps = {
     let mut ops = InodeOps::empty();
     ops.mkdir = tmpfs_mkdir;

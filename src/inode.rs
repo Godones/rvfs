@@ -19,6 +19,10 @@ bitflags! {
         const S_SYMLINK = 0o120000;
         const S_DIR = 0o040000;
         const S_FILE = 0o100000;
+        const S_BLKDEV = 0o060000;
+        const S_CHARDEV = 0o020000;
+        const S_FIFO = 0o010000;
+        const S_SOCK = 0o140000;
     }
 }
 
@@ -140,6 +144,13 @@ pub struct InodeOps {
     /// mkdir(dir, dentry, mode)  在某个目录下，为与目录项对应的目录创建一个新的索引节点
     pub mkdir: fn(dir: Arc<Inode>, dentry: Arc<DirEntry>, mode: FileMode) -> StrResult<()>,
     pub rmdir: fn(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()>,
+    pub mknod: fn(
+        dir: Arc<Inode>,
+        dentry: Arc<DirEntry>,
+        type_: InodeMode,
+        mode: FileMode,
+        dev: u32,
+    ) -> StrResult<()>,
     /// 在某个目录下，创建一个硬链接
     pub link:
         fn(old_dentry: Arc<DirEntry>, dir: Arc<Inode>, new_dentry: Arc<DirEntry>) -> StrResult<()>,
@@ -175,6 +186,7 @@ impl InodeOps {
             create: |_, _, _| Err("Not support"),
             mkdir: |_, _, _| Err("Not support"),
             rmdir: |_, _| Err("Not support"),
+            mknod: |_, _, _, _, _| Err("Not Support"),
             link: |_, _, _| Err("Not support"),
             unlink: |_, _| Err("Not support"),
             truncate: |_| Err("Not support"),
@@ -241,9 +253,7 @@ pub fn create_tmp_inode_from_sb_blk(
     // 设置硬链接数
     match mode {
         InodeMode::S_DIR => inode.access_inner().hard_links = 2,
-        InodeMode::S_FILE => inode.access_inner().hard_links = 1,
-        InodeMode::S_SYMLINK => inode.access_inner().hard_links = 1,
-        _ => return Err("error file type"),
+        _ => inode.access_inner().hard_links = 1,
     }
     ddebug!("create_tmp_inode_from_sb_blk end");
     Ok(inode)

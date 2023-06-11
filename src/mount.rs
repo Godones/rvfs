@@ -166,7 +166,7 @@ fn do_add_mount(
 ) -> VfsResult<Arc<VfsMount>> {
     ddebug!("do_add_mount");
     if fs_type.is_empty() {
-        return Err(VfsError::FsTypeNotFound)
+        return Err(VfsError::FsTypeNotFound);
     }
     // 加载文件系统超级块
     let mount = do_kernel_mount(fs_type, flags, dev_name, mnt_flags, data)?;
@@ -177,11 +177,11 @@ fn do_add_mount(
         .mount_flag
         .contains(MountFlags::MNT_INTERNAL)
     {
-        return Err(VfsError::MountInternal)
+        return Err(VfsError::MountInternal);
     }
     // 挂载系统目录
     debug!("**do_add_mount: mount.lock().flag = mnt_flags ok");
-    check_and_graft_tree(mount, look).map_err(|err|VfsError::Other(err.to_string()))
+    check_and_graft_tree(mount, look).map_err(|err| VfsError::Other(err.to_string()))
 }
 
 /// 生成一个挂载点
@@ -196,7 +196,7 @@ pub fn do_kernel_mount(
     let fs_type = lookup_filesystem(fs_type);
     // 错误的文件系统类型
     if fs_type.is_none() {
-        return Err(VfsError::FsTypeNotFound)
+        return Err(VfsError::FsTypeNotFound);
     }
     let fs_type = fs_type.unwrap();
     // 从设备读取文件系统超级块数据
@@ -205,13 +205,14 @@ pub fn do_kernel_mount(
 
     warn!("super_blk = {:#x?}", super_blk);
 
-    let super_blk  = if super_blk.is_none(){
+    let super_blk = if super_blk.is_none() {
         let get_sb_func = fs_type.get_super_blk;
-        let super_blk = (get_sb_func)(fs_type.clone(), flags, dev_name, data).map_err(|err|VfsError::DiskFsError(err.to_string()))?;
+        let super_blk = (get_sb_func)(fs_type.clone(), flags, dev_name, data)
+            .map_err(|err| VfsError::DiskFsError(err.to_string()))?;
         // 将sb_blk插入到fs_type的链表中
         fs_type.insert_super_blk(super_blk.clone());
         super_blk
-    }else {
+    } else {
         super_blk.unwrap()
     };
 
@@ -281,7 +282,6 @@ fn graft_tree(new_mount: Arc<VfsMount>, look: &LookUpData) -> StrResult<()> {
      * 2、如果目录还在缓存哈希表中，说明它是有效的，可mount
      * 否则不能mount
      */
-
 
     // TODO 修改判断挂载点可用的条件
     // let c = look.dentry.clone();

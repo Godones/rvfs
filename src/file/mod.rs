@@ -244,6 +244,44 @@ pub fn vfs_fsync(file: Arc<File>) -> StrResult<()> {
     fsync(file, true)
 }
 
+pub fn vfs_mknod<T: ProcessFs>(
+    name: &str,
+    type_: InodeMode,
+    mode: FileMode,
+    dev: u32,
+) -> StrResult<()> {
+    ddebug!("vfs_mknod");
+    let lookup_data = path_walk::<T>(name, LookUpFlags::NOLAST);
+    if lookup_data.is_err() {
+        return Err("Can't find father dir");
+    }
+    let mut lookup_data = lookup_data.unwrap();
+    if lookup_data.path_type != PathType::PATH_NORMAL {
+        return Err("It is not normal dir");
+    }
+    debug!("find child");
+    // 搜索子目录
+    let last = lookup_data.last.clone();
+    debug!("last:{}", last);
+    let inode = lookup_data.dentry.access_inner().d_inode.clone();
+    let dentry = lookup_data.dentry.clone();
+    let sub_dentry = find_file_indir(&mut lookup_data, &last);
+    if sub_dentry.is_ok() {
+        return Err("Dir exists");
+    }
+    debug!("create new special file");
+    // 调用函数创建一个新的目录
+    let target_dentry = Arc::new(DirEntry::empty());
+    // 设置目录名
+    target_dentry.access_inner().d_name = last;
+    // 设置父子关系
+    target_dentry.access_inner().parent = Arc::downgrade(&dentry);
+    let mknode = inode.inode_ops.mknod;
+    mknode(inode, target_dentry.clone(), type_, mode, dev)?;
+    dentry.insert_child(target_dentry);
+    Ok(())
+}
+
 impl From<OpenFlags> for LookUpFlags {
     fn from(val: OpenFlags) -> Self {
         let mut flags = LookUpFlags::READ_LINK;

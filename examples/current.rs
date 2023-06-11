@@ -68,6 +68,6 @@ fn readdir(dir: Arc<File>) {
     let r = vfs_readdir(dir, &mut dirents[..]).unwrap();
     assert_eq!(r, len);
     Dirent64Iterator::new(&dirents[..]).for_each(|x| {
-        println!("{} {:?} {}",x.get_name(),x.type_,x.ino);
+        println!("{} {:?} {}", x.get_name(), x.type_, x.ino);
     });
 }

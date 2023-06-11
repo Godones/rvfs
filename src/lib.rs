@@ -5,8 +5,10 @@
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::type_complexity, clippy::too_many_arguments)]
 //! virtual file system framework
-
+#[macro_use]
+extern crate downcast;
 pub mod dentry;
+pub mod devfs;
 pub mod file;
 pub mod info;
 pub mod inode;
@@ -21,6 +23,7 @@ extern crate alloc;
 extern crate log;
 use crate::dentry::DirEntry;
 use crate::mount::{do_kernel_mount, MountFlags, VfsMount};
+use crate::ramfs::rootfs::ROOTFS_TYPE;
 use crate::superblock::{register_filesystem, FileSystemType};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -28,7 +31,6 @@ use info::{ProcessFs, ProcessFsInfo, VfsTime};
 use lazy_static::lazy_static;
 pub use log::{debug, info, warn};
 use spin::{Mutex, RwLock};
-use crate::ramfs::rootfs::ROOTFS_TYPE;
 
 pub type StrResult<T> = Result<T, &'static str>;
 

@@ -68,8 +68,6 @@ pub fn vfs_getattr_by_file(file: Arc<File>) -> StrResult<KStat> {
 fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
     let sb_blk = inode.super_blk.upgrade().unwrap();
     let sb_blk = sb_blk;
-    let inode = inode;
-
     let inner = inode.access_inner();
 
     // TODO！ update dir size
@@ -81,7 +79,7 @@ fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
     };
 
     KStat {
-        st_dev: sb_blk.dev_desc as u64,
+        st_dev: inode.dev_desc as u64,
         st_ino: inode.number as u64,
         st_mode: inode.mode.bits(),
         st_nlink: inner.hard_links,
