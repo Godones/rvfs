@@ -258,3 +258,9 @@ pub fn create_tmp_inode_from_sb_blk(
     ddebug!("create_tmp_inode_from_sb_blk end");
     Ok(inode)
 }
+
+
+// pub fn vfs_mknod(dir: Arc<Inode>, dentry: Arc<DirEntry>, type_: InodeMode, mode: FileMode, dev: u32)->StrResult<()>{
+//     let mknod = dir.inode_ops.mknod;
+//     mknod(dir, dentry, type_, mode, dev)
+// }

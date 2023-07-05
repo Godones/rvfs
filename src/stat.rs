@@ -105,6 +105,11 @@ fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
 pub fn vfs_statfs<T: ProcessFs>(file_name: &str) -> StrResult<StatFs> {
     let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
     let sb_blk = lookup_data.mnt.super_block.clone();
+    let statfs = sb_blk.super_block_ops.stat_fs;
+    let res  = statfs(sb_blk.clone());
+    if res.is_ok(){
+        return  res
+    }
     simple_statfs(sb_blk)
 }
 
@@ -200,6 +205,19 @@ pub fn vfs_listxattr_by_file(file: Arc<File>, buf: &mut [u8]) -> StrResult<usize
     Ok(len)
 }
 
+
+pub fn vfs_set_time<T: ProcessFs>(_file_name: &str, _time:[VfsTime;3]) -> StrResult<()> {
+    ddebug!("vfs_set_time");
+    // let lookup_data = path_walk::<T>(file_name, LookUpFlags::empty())?;
+    // let inode = lookup_data.dentry.access_inner().d_inode.clone();
+    // let set_time = inode.inode_ops.set_time;
+    // set_time(lookup_data.dentry, time, flags)?;
+    ddebug!("vfs_set_time end");
+    Ok(())
+}
+
+
+
 bitflags! {
     pub struct StatFlags:u32{
         const AT_EMPTY_PATH = 0x1000;
@@ -207,3 +225,4 @@ bitflags! {
         const AT_SYMLINK_NOFOLLOW = 0x100;
     }
 }
+

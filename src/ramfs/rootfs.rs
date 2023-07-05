@@ -17,7 +17,7 @@ use core::cmp::min;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
-use log::debug;
+use log::{debug};
 use spin::Mutex;
 
 static INODE_COUNT: AtomicUsize = AtomicUsize::new(0);

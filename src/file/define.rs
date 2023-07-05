@@ -1,5 +1,5 @@
 use crate::dentry::DirEntry;
-use crate::inode::Inode;
+use crate::inode::{Inode, SpecialData};
 use crate::mount::VfsMount;
 use crate::StrResult;
 use alloc::sync::Arc;
@@ -12,13 +12,13 @@ pub struct File {
     pub f_mnt: Arc<VfsMount>,
     // 文件操作
     pub f_ops: FileOps,
-    pub flags: OpenFlags,
     // 打开模式
     pub f_mode: FileMode,
     inner: Mutex<FileInner>,
 }
 #[derive(Debug)]
 pub struct FileInner {
+    pub flags: OpenFlags,
     // 文件偏移量
     pub f_pos: usize,
     pub f_uid: u32,
@@ -28,7 +28,6 @@ pub struct FileInner {
 impl Debug for File {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("File")
-            .field("flags", &self.flags)
             .field("f_mode", &self.f_mode)
             .field("f_dentry", &self.f_dentry)
             .field("inner", &self.inner)
@@ -48,9 +47,10 @@ impl File {
             f_dentry: dentry,
             f_mnt: mnt,
             f_ops,
-            flags,
+
             f_mode: mode,
             inner: Mutex::new(FileInner {
+                flags,
                 f_pos: 0,
                 f_uid: 0,
                 f_gid: 0,
@@ -60,6 +60,27 @@ impl File {
     pub fn access_inner(&self) -> MutexGuard<FileInner> {
         self.inner.lock()
     }
+
+    pub fn is_block_device(&self) -> bool {
+        if let Some(SpecialData::BlockData(_x)) = self.f_dentry.access_inner().d_inode.access_inner().special_data{
+            return true;
+        }
+        false
+    }
+
+    pub fn is_character_device(&self) -> bool {
+        if let Some(SpecialData::CharData(_x)) = self.f_dentry.access_inner().d_inode.access_inner().special_data{
+            return true;
+        }
+        false
+    }
+
+    pub fn is_pipe(&self) -> bool {
+        if let Some(SpecialData::PipeData(_x)) = self.f_dentry.access_inner().d_inode.access_inner().special_data{
+            return true;
+        }
+        false
+    }
 }
 
 bitflags! {
@@ -68,15 +89,58 @@ bitflags! {
         const O_WRONLY = 0x1;
         const O_RDWR = 0x2;
         const O_CREAT = 0x40;
+        const O_EXCLUSIVE = 0x80;
+        const O_NOCTTY = 0x100;
         const O_EXCL = 0x200;
-        const O_NOCTTY = 0x400;
-        const O_TRUNC = 0x1000;
-        const O_APPEND = 0x2000;
-        const O_NONBLOCK = 0x4000;
-        const O_NOFOLLOW = 0x400000;
+        const O_APPEND = 0x400;
+        const O_NONBLOCK = 0x800;
+        const O_TRUNC = 0x1000; //?
+        const O_TEXT = 0x4000;
+        const O_BINARY = 0x8000;
+        const O_DSYNC = 0x10000;
+        const O_NOFOLLOW = 0x20000;
+        const O_CLOSEEXEC = 0x80000;
         const O_DIRECTORY = 0x200000;
     }
 }
+
+/*
+S_IRWXU  00700 user (file owner) has read, write, and
+execute permission
+
+S_IRUSR  00400 user has read permission
+
+S_IWUSR  00200 user has write permission
+
+S_IXUSR  00100 user has execute permission
+
+S_IRWXG  00070 group has read, write, and execute
+permission
+
+S_IRGRP  00040 group has read permission
+
+S_IWGRP  00020 group has write permission
+
+S_IXGRP  00010 group has execute permission
+
+S_IRWXO  00007 others have read, write, and execute
+permission
+
+S_IROTH  00004 others have read permission
+
+S_IWOTH  00002 others have write permission
+
+S_IXOTH  00001 others have execute permission
+
+According to POSIX, the effect when other bits are set in
+mode is unspecified.  On Linux, the following bits are
+also honored in mode:
+
+S_ISUID  0004000 set-user-ID bit
+
+S_ISGID  0002000 set-group-ID bit (see inode(7)).
+
+S_ISVTX  0001000 sticky bit (see inode(7)).*/
 bitflags! {
     pub struct FileMode:u32{
         const FMODE_READ = 0x0;
@@ -84,7 +148,47 @@ bitflags! {
         const FMODE_RDWR = 0x2;
         const FMODE_EXEC = 0x5; //read and execute
     }
+
+    pub struct FileMode2:u32{
+        const S_IRUSR = 0x00400;
+        const S_IWUSR = 0x00200;
+        const S_IXUSR = 0x00100;
+        const S_IRWXU = 0x0070;
+        const S_IRGRP = 0x00040;
+        const S_IWGRP = 0x00020;
+        const S_IXGRP = 0x00010;
+        const S_IRWXG = 0x0007;
+        const S_IROTH = 0x00004;
+        const S_IWOTH = 0x00002;
+        const S_IXOTH = 0x00001;
+        const S_ISUID = 0x0004000;
+        const S_ISGID = 0x0002000;
+        const S_ISVTX = 0x0001000;
+    }
 }
+
+impl Default for FileMode2{
+    fn default() -> Self {
+        FileMode2::from_bits_truncate(0x600)
+    }
+}
+
+impl From<FileMode2> for FileMode{
+    fn from(value: FileMode2) -> Self {
+        let mut file_mode = FileMode::empty();
+        if value.contains(FileMode2::S_IRUSR) {
+            file_mode |= FileMode::FMODE_READ;
+        }
+        if value.contains(FileMode2::S_IWUSR) {
+            file_mode |= FileMode::FMODE_WRITE;
+        }
+        if value.contains(FileMode2::S_IXUSR) {
+            file_mode |= FileMode::FMODE_EXEC;
+        }
+        file_mode
+    }
+}
+
 impl From<&[u8]> for FileMode {
     fn from(value: &[u8]) -> Self {
         let mut mode = FileMode::empty();
@@ -101,7 +205,7 @@ impl From<&[u8]> for FileMode {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug,Copy, Clone)]
 pub enum SeekFrom {
     Start(u64),
     End(u64),

@@ -42,7 +42,7 @@ pub trait ProcessFs {
     fn current_time() -> VfsTime;
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone,Copy)]
 #[repr(C)]
 pub struct VfsTime {
     pub year: u32,

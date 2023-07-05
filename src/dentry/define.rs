@@ -194,6 +194,8 @@ impl Debug for Dirent64 {
 impl Dirent64 {
     pub fn new(name: &str, ino: u64, off: i64, type_: DirentType) -> Self {
         let size = core::mem::size_of::<Self>() + name.len() + 1;
+        // align to 8 bytes
+        let size = (size + 7) & !7;
         Self {
             ino,
             off,

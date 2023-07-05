@@ -282,6 +282,19 @@ pub fn vfs_mknod<T: ProcessFs>(
     Ok(())
 }
 
+
+
+pub fn vfs_ioctl(file: Arc<File>, _cmd: u32, _arg: usize) -> StrResult<usize> {
+    let is_char_dev = file.is_character_device();
+    if !is_char_dev {
+        return Err("not a character device");
+    }
+    let _ioctl = file.f_ops.ioctl;
+    // ioctl(file, cmd, arg)
+    Ok(0)
+}
+
+
 impl From<OpenFlags> for LookUpFlags {
     fn from(val: OpenFlags) -> Self {
         let mut flags = LookUpFlags::READ_LINK;

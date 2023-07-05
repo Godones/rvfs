@@ -17,7 +17,7 @@ use crate::superblock::{
 };
 use crate::StrResult;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use log::debug;
+use log::{debug, warn};
 use spin::Mutex;
 
 static INODE_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -57,6 +57,8 @@ const DEVFS_DIR_FILE_OPS: FileOps = {
 const DEVFS_OTHER_FILE_OPS: FileOps = {
     let mut ops = FileOps::empty();
     ops.open = |_| Ok(());
+    ops.write = devfs_other_file_write;
+    ops.read = devfs_other_file_read;
     ops
 };
 
@@ -474,4 +476,28 @@ fn __dev_find_in_dir(node: Arc<DevNode>, name: &str) -> StrResult<Arc<DevNode>> 
         }
         _ => Err("not a dir"),
     };
+}
+
+
+fn devfs_other_file_write(file: Arc<File>, _buf: &[u8], _offset: u64) -> StrResult<usize>{
+    let _devnode = inode_to_devnode(file.f_dentry.access_inner().d_inode.clone())?;
+    // now we don't support write
+    Ok(0)
+}
+
+fn devfs_other_file_read(file: Arc<File>, buf: &mut [u8], _offset: u64) -> StrResult<usize>{
+    warn!("devfs_other_file_read");
+    let devnode = inode_to_devnode(file.f_dentry.access_inner().d_inode.clone())?;
+    match devnode.access_inner().dev_type{
+        DevType::Dev(dev) => {
+            if dev == 0 || dev == u32::MAX{
+                buf.fill(0);
+                return Ok(buf.len())
+            }
+        }
+        DevType::Dir(_) => {}
+        DevType::SymLink(_) => {}
+        DevType::Regular => {}
+    }
+    Ok(0)
 }
