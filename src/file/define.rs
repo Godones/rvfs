@@ -4,6 +4,7 @@ use crate::mount::VfsMount;
 use crate::StrResult;
 use alloc::sync::Arc;
 use bitflags::bitflags;
+use core::fmt;
 use core::fmt::{Debug, Formatter};
 use spin::{Mutex, MutexGuard};
 
@@ -23,6 +24,7 @@ pub struct FileInner {
     pub f_pos: usize,
     pub f_uid: u32,
     pub f_gid: u32,
+    pub f_ops_ext: FileExtOps,
 }
 
 impl Debug for File {
@@ -54,6 +56,7 @@ impl File {
                 f_pos: 0,
                 f_uid: 0,
                 f_gid: 0,
+                f_ops_ext: FileExtOps::empty(),
             }),
         }
     }
@@ -62,21 +65,39 @@ impl File {
     }
 
     pub fn is_block_device(&self) -> bool {
-        if let Some(SpecialData::BlockData(_x)) = self.f_dentry.access_inner().d_inode.access_inner().special_data{
+        if let Some(SpecialData::BlockData(_x)) = self
+            .f_dentry
+            .access_inner()
+            .d_inode
+            .access_inner()
+            .special_data
+        {
             return true;
         }
         false
     }
 
     pub fn is_character_device(&self) -> bool {
-        if let Some(SpecialData::CharData(_x)) = self.f_dentry.access_inner().d_inode.access_inner().special_data{
+        if let Some(SpecialData::CharData(_x)) = self
+            .f_dentry
+            .access_inner()
+            .d_inode
+            .access_inner()
+            .special_data
+        {
             return true;
         }
         false
     }
 
     pub fn is_pipe(&self) -> bool {
-        if let Some(SpecialData::PipeData(_x)) = self.f_dentry.access_inner().d_inode.access_inner().special_data{
+        if let Some(SpecialData::PipeData(_x)) = self
+            .f_dentry
+            .access_inner()
+            .d_inode
+            .access_inner()
+            .special_data
+        {
             return true;
         }
         false
@@ -167,13 +188,13 @@ bitflags! {
     }
 }
 
-impl Default for FileMode2{
+impl Default for FileMode2 {
     fn default() -> Self {
         FileMode2::from_bits_truncate(0x600)
     }
 }
 
-impl From<FileMode2> for FileMode{
+impl From<FileMode2> for FileMode {
     fn from(value: FileMode2) -> Self {
         let mut file_mode = FileMode::empty();
         if value.contains(FileMode2::S_IRUSR) {
@@ -205,7 +226,7 @@ impl From<&[u8]> for FileMode {
     }
 }
 
-#[derive(Debug,Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum SeekFrom {
     Start(u64),
     End(u64),
@@ -228,6 +249,36 @@ impl From<(usize, usize)> for SeekFrom {
 pub struct VmArea {
     pub vm_start: usize,
     pub vm_end: usize,
+}
+
+/// For poll
+#[derive(Clone)]
+pub struct FileExtOps {
+    pub is_ready_read: fn(file: Arc<File>) -> bool,
+    pub is_ready_write: fn(file: Arc<File>) -> bool,
+    pub is_ready_exception: fn(file: Arc<File>) -> bool,
+    pub is_hang_up: fn(file: Arc<File>) -> bool,
+}
+impl Debug for FileExtOps {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FileExtOps")
+            .field("is_ready_read", &"fn(file: Arc<File>) -> bool")
+            .field("is_ready_write", &"fn(file: Arc<File>) -> bool")
+            .field("is_ready_exception", &"fn(file: Arc<File>) -> bool")
+            .field("is_hang_up", &"fn(file: Arc<File>) -> bool")
+            .finish()
+    }
+}
+
+impl FileExtOps {
+    pub const fn empty() -> Self {
+        FileExtOps {
+            is_ready_read: |_| true,
+            is_ready_write: |_| true,
+            is_ready_exception: |_| false,
+            is_hang_up: |_| false,
+        }
+    }
 }
 
 #[derive(Clone)]

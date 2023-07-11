@@ -26,7 +26,17 @@ pub fn vfs_open_file<T: ProcessFs>(
         flags |= OpenFlags::O_RDWR;
     }
     let lookup_data = open_dentry::<T>(name, flags, mode)?;
-    construct_file(&lookup_data, flags, mode)
+    let file = construct_file(&lookup_data, flags, mode)?;
+    if flags.contains(OpenFlags::O_APPEND) {
+        let size = file
+            .f_dentry
+            .access_inner()
+            .d_inode
+            .access_inner()
+            .file_size;
+        file.access_inner().f_pos = size;
+    }
+    Ok(file)
 }
 
 fn construct_file(
@@ -106,7 +116,7 @@ pub fn vfs_read_file<T: ProcessFs>(
         file.access_inner().f_pos = offset as usize + len;
         return Ok(len);
     }
-    Err("read error")
+    Err(len.err().unwrap())
 }
 
 /// write file
@@ -282,8 +292,6 @@ pub fn vfs_mknod<T: ProcessFs>(
     Ok(())
 }
 
-
-
 pub fn vfs_ioctl(file: Arc<File>, _cmd: u32, _arg: usize) -> StrResult<usize> {
     let is_char_dev = file.is_character_device();
     if !is_char_dev {
@@ -293,7 +301,6 @@ pub fn vfs_ioctl(file: Arc<File>, _cmd: u32, _arg: usize) -> StrResult<usize> {
     // ioctl(file, cmd, arg)
     Ok(0)
 }
-
 
 impl From<OpenFlags> for LookUpFlags {
     fn from(val: OpenFlags) -> Self {

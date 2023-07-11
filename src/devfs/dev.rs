@@ -338,6 +338,7 @@ pub fn devfs_dir_readdir(file: Arc<File>, dirents: &mut [u8]) -> StrResult<usize
                 .sum::<usize>();
             return Ok(size + base);
         }
+        return Ok(base);
     }
     let mut count = 0;
     let buf_len = dirents.len();
@@ -478,21 +479,20 @@ fn __dev_find_in_dir(node: Arc<DevNode>, name: &str) -> StrResult<Arc<DevNode>> 
     };
 }
 
-
-fn devfs_other_file_write(file: Arc<File>, _buf: &[u8], _offset: u64) -> StrResult<usize>{
+fn devfs_other_file_write(file: Arc<File>, _buf: &[u8], _offset: u64) -> StrResult<usize> {
     let _devnode = inode_to_devnode(file.f_dentry.access_inner().d_inode.clone())?;
     // now we don't support write
     Ok(0)
 }
 
-fn devfs_other_file_read(file: Arc<File>, buf: &mut [u8], _offset: u64) -> StrResult<usize>{
+fn devfs_other_file_read(file: Arc<File>, buf: &mut [u8], _offset: u64) -> StrResult<usize> {
     warn!("devfs_other_file_read");
     let devnode = inode_to_devnode(file.f_dentry.access_inner().d_inode.clone())?;
-    match devnode.access_inner().dev_type{
+    match devnode.access_inner().dev_type {
         DevType::Dev(dev) => {
-            if dev == 0 || dev == u32::MAX{
+            if dev == 0 || dev == u32::MAX {
                 buf.fill(0);
-                return Ok(buf.len())
+                return Ok(buf.len());
             }
         }
         DevType::Dir(_) => {}

@@ -228,6 +228,9 @@ fn tmpfs_follow_link(dentry: Arc<DirEntry>, lookup_data: &mut LookUpData) -> Str
 /// read the contents of a directory
 fn tmpfs_readdir(file: Arc<File>, dirents: &mut [u8]) -> StrResult<usize> {
     ddebug!("rootfs_readdir");
+    let mut file_inner = file.access_inner();
+    let f_pos = file_inner.f_pos;
+
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let number = inode.number;
     let bind = TMP_FS.lock();
@@ -236,9 +239,11 @@ fn tmpfs_readdir(file: Arc<File>, dirents: &mut [u8]) -> StrResult<usize> {
     let mut count_empty = 0;
     let buf_len = dirents.len();
     let mut ptr = dirents.as_mut_ptr();
+    let mut read_num = 0;
     ram_inode
         .dentries
         .iter()
+        .skip(f_pos)
         .enumerate()
         .for_each(|(index, (name, &number))| {
             let sub_inode = bind.get(&number).unwrap();
@@ -257,8 +262,10 @@ fn tmpfs_readdir(file: Arc<File>, dirents: &mut [u8]) -> StrResult<usize> {
                     ptr = ptr.add(dirent_ptr.len());
                 }
                 count += dirent_ptr.len();
+                read_num += 1;
             }
         });
+    file_inner.f_pos += read_num;
     // if the buf len is zero,we return the size of all dirents
     if buf_len == 0 {
         return Ok(count_empty);
