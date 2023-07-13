@@ -258,6 +258,7 @@ pub struct FileExtOps {
     pub is_ready_write: fn(file: Arc<File>) -> bool,
     pub is_ready_exception: fn(file: Arc<File>) -> bool,
     pub is_hang_up: fn(file: Arc<File>) -> bool,
+    pub ioctl:fn(file:Arc<File>,cmd:u32,arg:usize)->isize,
 }
 impl Debug for FileExtOps {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -277,6 +278,7 @@ impl FileExtOps {
             is_ready_write: |_| true,
             is_ready_exception: |_| false,
             is_hang_up: |_| false,
+            ioctl: |_,_,_|-1,
         }
     }
 }

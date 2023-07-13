@@ -53,7 +53,7 @@ pub struct KStat {
 pub fn vfs_getattr<T: ProcessFs>(file_name: &str, _flag: StatFlags) -> StrResult<KStat> {
     // now we ignore flag
     // assert!(flag.is_empty());
-    let file = vfs_open_file::<T>(file_name, OpenFlags::O_RDONLY, FileMode::FMODE_READ)?;
+    let file = vfs_open_file::<T>(file_name, OpenFlags::O_RDONLY, FileMode::FMODE_RDWR)?;
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let attr = generic_get_file_attribute(inode);
     Ok(attr)
@@ -66,8 +66,6 @@ pub fn vfs_getattr_by_file(file: Arc<File>) -> StrResult<KStat> {
 }
 
 fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
-    let sb_blk = inode.super_blk.upgrade().unwrap();
-    let sb_blk = sb_blk;
     let inner = inode.access_inner();
 
     // TODO！ update dir size
@@ -76,6 +74,11 @@ fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
     let size = match inode.mode {
         InodeMode::S_DIR => inner.file_size * PER_DIR_ENTRY_SIZE,
         _ => inner.file_size,
+    };
+    let st_blocks = if inode.blk_size == 0{
+        0
+    }else {
+        (inner.file_size / inode.blk_size as usize) as u64
     };
 
     KStat {
@@ -90,7 +93,7 @@ fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
         st_size: size as u64,
         st_blksize: inode.blk_size,
         __pad2: 0,
-        st_blocks: (inner.file_size / sb_blk.block_size as usize) as u64,
+        st_blocks ,
         st_atime_sec: 0,
         st_atime_nsec: 0,
         st_mtime_sec: 0,

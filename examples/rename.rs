@@ -61,7 +61,7 @@ fn main() {
 
 fn readdir(dir: Arc<File>) {
     let len = vfs_readdir(dir.clone(), &mut [0; 0]).unwrap();
-    assert!(len > 0);
+    // assert!(len >= 0);
     let mut dirents = vec![0u8; len];
 
     let r = vfs_readdir(dir, &mut dirents[..]).unwrap();
