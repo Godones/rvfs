@@ -1,6 +1,7 @@
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::sync::{Arc, Weak};
+use alloc::vec;
 
 use core::cmp::min;
 
@@ -479,9 +480,21 @@ fn __dev_find_in_dir(node: Arc<DevNode>, name: &str) -> StrResult<Arc<DevNode>> 
     };
 }
 
-fn devfs_other_file_write(file: Arc<File>, _buf: &[u8], _offset: u64) -> StrResult<usize> {
-    let _devnode = inode_to_devnode(file.f_dentry.access_inner().d_inode.clone())?;
+fn devfs_other_file_write(file: Arc<File>, buf: &[u8], _offset: u64) -> StrResult<usize> {
+    let devnode = inode_to_devnode(file.f_dentry.access_inner().d_inode.clone())?;
     // now we don't support write
+    match devnode.access_inner().dev_type {
+        DevType::Dev(dev) => {
+            if dev == 0 || dev == u32::MAX {
+                let mut tmp = vec![0; buf.len()];
+                tmp.copy_from_slice(buf);
+                return Ok(buf.len());
+            }
+        }
+        DevType::Dir(_) => {}
+        DevType::SymLink(_) => {}
+        DevType::Regular => {}
+    }
     Ok(0)
 }
 
