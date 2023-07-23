@@ -150,7 +150,7 @@ pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) ->
         }
         Ok(len)
     } else {
-        Err("write file failed")
+        len
     }
 }
 
