@@ -512,6 +512,7 @@ fn devfs_other_file_read(file: Arc<File>, buf: &mut [u8], _offset: u64) -> StrRe
                 for i in 0..buf.len() {
                     buf[i] = (i % 256) as u8;
                 }
+                return Ok(buf.len());
             }
         }
         DevType::Dir(_) => {}
