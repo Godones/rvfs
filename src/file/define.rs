@@ -102,6 +102,19 @@ impl File {
         }
         false
     }
+
+    pub fn is_socket(&self) -> bool{
+        if let Some(SpecialData::Socket) = self
+            .f_dentry
+            .access_inner()
+            .d_inode
+            .access_inner()
+            .special_data
+        {
+            return true;
+        }
+        false
+    }
 }
 
 bitflags! {

@@ -69,6 +69,7 @@ pub enum SpecialData {
     PipeData(*const u8),
     CharData(*const u8),
     BlockData(*const u8),
+    Socket,
 }
 
 impl Inode {
