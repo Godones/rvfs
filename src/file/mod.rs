@@ -125,8 +125,11 @@ pub fn vfs_read_file<T: ProcessFs>(
 pub fn vfs_write_file<T: ProcessFs>(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
     let write = file.f_ops.write;
     let mode = file.f_mode;
+    let mode2 = file.access_inner().f_mode2.clone();
     if !mode.contains(FileMode::FMODE_WRITE) && !mode.contains(FileMode::FMODE_RDWR) {
-        return Err("file not open for writing");
+        if mode2 != FileMode2::from_bits_truncate(0x777) {
+            return Err("file not open for writing");
+        }
     }
     // check whether file is valid
     let inode = file.f_dentry.access_inner().d_inode.clone();

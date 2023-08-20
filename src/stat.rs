@@ -75,9 +75,9 @@ fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
         InodeMode::S_DIR => inner.file_size * PER_DIR_ENTRY_SIZE,
         _ => inner.file_size,
     };
-    let st_blocks = if inode.blk_size == 0{
+    let st_blocks = if inode.blk_size == 0 {
         0
-    }else {
+    } else {
         (inner.file_size / inode.blk_size as usize) as u64
     };
 
@@ -93,7 +93,7 @@ fn generic_get_file_attribute(inode: Arc<Inode>) -> KStat {
         st_size: size as u64,
         st_blksize: inode.blk_size,
         __pad2: 0,
-        st_blocks ,
+        st_blocks,
         st_atime_sec: 0,
         st_atime_nsec: 0,
         st_mtime_sec: 0,

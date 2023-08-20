@@ -25,6 +25,7 @@ pub struct FileInner {
     pub f_uid: u32,
     pub f_gid: u32,
     pub f_ops_ext: FileExtOps,
+    pub f_mode2: FileMode2,
 }
 
 impl Debug for File {
@@ -57,6 +58,7 @@ impl File {
                 f_uid: 0,
                 f_gid: 0,
                 f_ops_ext: FileExtOps::empty(),
+                f_mode2: FileMode2::default(),
             }),
         }
     }
@@ -103,7 +105,7 @@ impl File {
         false
     }
 
-    pub fn is_socket(&self) -> bool{
+    pub fn is_socket(&self) -> bool {
         if let Some(SpecialData::Socket) = self
             .f_dentry
             .access_inner()
@@ -271,7 +273,7 @@ pub struct FileExtOps {
     pub is_ready_write: fn(file: Arc<File>) -> bool,
     pub is_ready_exception: fn(file: Arc<File>) -> bool,
     pub is_hang_up: fn(file: Arc<File>) -> bool,
-    pub ioctl:fn(file:Arc<File>,cmd:u32,arg:usize)->isize,
+    pub ioctl: fn(file: Arc<File>, cmd: u32, arg: usize) -> isize,
 }
 impl Debug for FileExtOps {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -291,7 +293,7 @@ impl FileExtOps {
             is_ready_write: |_| true,
             is_ready_exception: |_| false,
             is_hang_up: |_| false,
-            ioctl: |_,_,_|-1,
+            ioctl: |_, _, _| -1,
         }
     }
 }
