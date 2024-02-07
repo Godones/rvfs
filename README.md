@@ -1,6 +1,7 @@
 # VFS
 The VFS framework is a virtual file system framework for Rust. It provides a unified interface for accessing different file systems. It is designed to be extensible and easy to use.
 
+See the new verson [rvfs](https://github.com/os-module/rvfs)
 ## Description
 
 ![vfs](assert/vfs.svg)
